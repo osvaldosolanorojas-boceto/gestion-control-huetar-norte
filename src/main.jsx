@@ -1,0 +1,77 @@
+import React, { useMemo, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import { LayoutDashboard, ShoppingCart, Truck, Factory, WalletCards, Users, UserRound, Landmark, Menu, X, Plus, Search, ChevronRight, ArrowUpRight, ArrowDownRight, CircleDollarSign, PackageCheck, Settings, LogOut } from 'lucide-react'
+import { isSupabaseReady } from './supabase'
+import './styles.css'
+
+const nav = [
+  ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
+  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Finanzas', WalletCards],
+  ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
+]
+
+const seed = {
+  'Órdenes de compra': [
+    {codigo:'OC-2026-0341', principal:'Randall Calvo', detalle:'Yuca · A rendimiento', estado:'Pendiente', monto:'₡ 4.830.000'},
+    {codigo:'OC-2026-0340', principal:'Agrosolano', detalle:'Yuca · Cosecha propia', estado:'En proceso', monto:'₡ 7.200.000'}
+  ],
+  'Boletas de entrada': [
+    {codigo:'BE-2026-0815', principal:'Agrosolano · El Concho', detalle:'420 cajas · Línea 1', estado:'En proceso', monto:'8.610 kg'},
+    {codigo:'BE-2026-0814', principal:'Luis Araya · Los Chiles', detalle:'285 cajas · Línea 2', estado:'Completada', monto:'5.842 kg'}
+  ],
+  'Órdenes de venta': [
+    {codigo:'OV-2026-0198', principal:'Grupo Plátanos López 3', detalle:'21 paletas · Estados Unidos', estado:'Preparando', monto:'US$ 27.540'},
+    {codigo:'OV-2026-0197', principal:'J&C', detalle:'1.320 cajas · Europa', estado:'Despachada', monto:'US$ 31.680'}
+  ],
+  Proveedores: [
+    {codigo:'PR-001', principal:'Agrosolano', detalle:'Productor propio · Zona Norte', estado:'Activo', monto:'Yuca · Ñampí'},
+    {codigo:'PR-002', principal:'Randall Calvo', detalle:'Agricultor · San Carlos', estado:'Activo', monto:'Yuca'}
+  ],
+  Clientes: [
+    {codigo:'CL-001', principal:'Grupo Plátanos López', detalle:'Estados Unidos', estado:'Activo', monto:'4–5 contenedores/sem'},
+    {codigo:'CL-002', principal:'J&C', detalle:'Europa', estado:'Activo', monto:'Crédito'}
+  ]
+}
+
+const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
+
+function App(){
+  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false)
+  const rows = useMemo(()=> (seed[section]||[]).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[section,search])
+  const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
+  return <div className="app">
+    <aside className={open?'sidebar open':'sidebar'}>
+      <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
+      <nav>{nav.map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button><LogOut size={19}/>Cerrar sesión</button></div>
+    </aside>
+    {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
+    <main>
+      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
+      <div className="content">{section==='Resumen'?<Dashboard go={go}/>:<Module title={section} rows={rows} search={search} setSearch={setSearch} onNew={()=>setModal(true)}/>}</div>
+    </main>
+    {modal&&<QuickModal title={section} close={()=>setModal(false)}/>} 
+  </div>
+}
+
+function Dashboard({go}){return <>
+  {!isSupabaseReady&&<div className="notice"><b>Modo de preparación:</b> la interfaz está funcionando. Falta conectar las claves privadas del proyecto Supabase.</div>}
+  <section className="hero"><div><span>SEMANA 38 · 2026</span><h2>Buenos días, Osvaldo</h2><p>Estado general de la exportadora y la operación agrícola.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
+  <div className="stats">
+    <Stat title="Ventas de la semana" value="US$ 248.760" note="8 contenedores" up icon={CircleDollarSign}/>
+    <Stat title="Compras de campo" value={money.format(42780000)} note="34 órdenes" icon={ShoppingCart}/>
+    <Stat title="Cuentas por cobrar" value="US$ 186.420" note="US$ 61.300 vencido" warning icon={ArrowUpRight}/>
+    <Stat title="Cuentas por pagar" value={money.format(68450000)} note="₡ 18.240.000 esta semana" icon={ArrowDownRight}/>
+  </div>
+  <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Producción y despachos de hoy</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>8</b><span>Boletas recibidas</span></div><div><b>42.680</b><span>kg procesados</span></div><div><b>3</b><span>Contenedores listos</span></div><div><b>86,4%</b><span>Rendimiento exportable</span></div></div></section>
+  <section className="panel"><div className="panelhead"><div><h3>Próximos movimientos</h3><p>Pagos y cobros prioritarios</p></div></div><ul className="moves"><li><i className="red"/><div><b>Pago a proveedores</b><span>Hoy · 14 facturas</span></div><strong>₡ 18,2 M</strong></li><li><i className="blue"/><div><b>Cobro Grupo Plátanos López</b><span>Mañana · 2 facturas</span></div><strong>US$ 54.900</strong></li><li><i className="yellow"/><div><b>Planilla semanal</b><span>Viernes · Campo y planta</span></div><strong>₡ 12,8 M</strong></li></ul></section></div>
+  <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Nueva compra</button><button onClick={()=>go('Boletas de entrada')}><Truck/>Recibir producto</button><button onClick={()=>go('Finanzas')}><WalletCards/>Registrar gasto</button><button onClick={()=>go('Bancos')}><Landmark/>Conciliar bancos</button></div></section>
+  </>}
+
+function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
+
+function Module({title,rows,search,setSearch,onNew}){return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div><button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button></div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{rows.length?<div className="rows">{rows.map(r=><article key={r.codigo}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className="arrow"><ChevronRight/></button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Módulo preparado</h3><p>Puede crear el primer registro de {title.toLowerCase()}.</p><button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button></div>}</section></>}
+
+function QuickModal({title,close}){return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input type="date" defaultValue="2026-09-19"/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label><label className="wide">Nombre o descripción<input placeholder="Escriba aquí…"/></label><label>Moneda<select><option>Colones (CRC)</option><option>Dólares (USD)</option><option>Euros (EUR)</option></select></label><label>Monto<input type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea rows="3" placeholder="Información adicional…"/></label></div><div className="modalactions"><button onClick={close}>Cancelar</button><button className="primary" onClick={close}>Guardar registro</button></div></div></div>}
+
+createRoot(document.getElementById('root')).render(<App/>)
