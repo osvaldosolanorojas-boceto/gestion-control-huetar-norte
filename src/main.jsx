@@ -1,82 +1,113 @@
-import React, { useEffect, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Menu, X, Plus, LogOut, LayoutDashboard, ShoppingCart, Truck, Users, PackageCheck, CircleDollarSign } from 'lucide-react'
-import { supabase } from './supabase'
+import { LayoutDashboard, ShoppingCart, Truck, Factory, WalletCards, Users, UserRound, Landmark, Menu, X, Plus, Search, ChevronRight, ArrowUpRight, ArrowDownRight, CircleDollarSign, PackageCheck, Settings, LogOut } from 'lucide-react'
+import { isSupabaseReady, supabase } from './supabase'
 import './styles.css'
-import './forms.css'
 
-const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Costa_Rica',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
-const products=['Yuca','Ñampí','Cabeza de ñampí','Camote','Caña de azúcar','Jengibre','Malanga lila','Malanga blanca','Malanga taro','Ñame','Chayote','Ayote','Cúrcuma','Papa china']
-const places=['El Concho','La Unión','Copevega','El Tanque','La Fortuna','Agua Azul','Muelle','Guápiles','Upala','Los Chiles','Caño Negro','Zona Norte']
-const currencies=['CRC','USD','EUR']
-const spec=(key,label,type='text',extra={})=>({key,label,type,...extra})
-const configs={
- Proveedores:{table:'proveedores',icon:Users,fields:[spec('nombre','Nombre completo','text',{required:true}),spec('telefono','Teléfono','tel'),spec('residencia','Residencia'),spec('zona','Zona','select',{options:places}),spec('tipo','Tipo','select',{options:['Agricultor','Intermediario','Propio']})],columns:['nombre','telefono','zona','tipo']},
- Clientes:{table:'clientes',icon:Users,fields:[spec('nombre','Nombre del cliente','text',{required:true}),spec('pais','País'),spec('mercado','Mercado','select',{options:['Europa','Estados Unidos','Canadá','Local','Otro']}),spec('contacto','Contacto'),spec('condiciones','Condiciones')],columns:['nombre','pais','mercado','contacto']},
- 'Órdenes de compra':{table:'ordenes_compra',icon:ShoppingCart,prefix:'OC',fields:[spec('fecha','Fecha','date',{required:true}),spec('proveedor_id','Proveedor','relation',{source:'proveedores',required:true}),spec('producto','Producto','select',{options:products,required:true}),spec('lugar','Finca o lugar','select',{options:places}),spec('tipo_compra','Tipo de compra','select',{options:['A rendimiento','En pie','Cosecha propia','Puesto en camión']}),spec('moneda','Moneda','select',{options:currencies,required:true}),spec('precio_europa','Precio Europa por quintal (46 kg)','number'),spec('precio_eeuu','Precio EE. UU. por quintal (46 kg)','number'),spec('precio_rechazo','Precio rechazo por quintal (46 kg)','number'),spec('estado','Estado','select',{options:['Pendiente','En proceso','Completada','Cancelada']}),spec('observaciones','Observaciones','textarea')],columns:['codigo','fecha','proveedor_id','producto','moneda','estado']},
- 'Boletas de entrada':{table:'boletas_entrada',icon:Truck,prefix:'BE',fields:[spec('proveedor_id','Proveedor','relation',{source:'proveedores',required:true}),spec('orden_compra_id','Orden de compra','relation',{source:'ordenes_compra',office:true}),spec('producto','Producto','select',{options:products,required:true}),spec('finca_lugar','Finca o lugar','select',{options:places}),spec('chofer','Chofer'),spec('placa','Placa'),spec('condicion','Condición','select',{options:['Mojado','Seco']}),spec('tipo_recipiente','Recipiente','select',{options:['Cajas','Sacos']}),spec('cantidad_recipientes','Cantidad de cajas o sacos','number',{required:true,step:'1',min:1}),spec('promedio_peso','Peso promedio de la muestra (kg)','number',{required:true,step:'0.001',min:0.001}),spec('linea_proceso','Línea de proceso','select',{options:['1','2']}),spec('encargado','Encargado de planta','select',{options:['Andrés','Javier','Emilio']}),spec('observaciones','Observaciones','textarea')],columns:['codigo','fecha_hora','proveedor_id','producto','cantidad_recipientes','kg_estimados']},
- 'Órdenes de venta':{table:'ordenes_venta',icon:PackageCheck,prefix:'OV',fields:[spec('fecha','Fecha','date',{required:true}),spec('cliente_id','Cliente','relation',{source:'clientes',required:true}),spec('mercado','Mercado','select',{options:['Europa','Estados Unidos','Canadá','Local','Otro']}),spec('contenedor','Contenedor'),spec('moneda','Moneda','select',{options:currencies,required:true}),spec('estado','Estado','select',{options:['Borrador','Preparando','Despachada','Cancelada']}),spec('observaciones','Observaciones','textarea')],columns:['codigo','fecha','cliente_id','mercado','moneda','estado']},
- 'Tipos de cambio':{table:'tipos_cambio',icon:CircleDollarSign,fields:[spec('fecha','Fecha','date',{required:true}),spec('moneda','Moneda','select',{options:['USD','EUR'],required:true}),spec('compra','Compra: colones por unidad','number',{required:true,min:0.0001,step:'0.0001'}),spec('venta','Venta: colones por unidad','number',{required:true,min:0.0001,step:'0.0001'})],columns:['fecha','moneda','compra','venta']}
-}
-const labelFor=key=>({codigo:'Código',fecha_hora:'Fecha de ingreso',kg_estimados:'Kg estimados',proveedor_id:'Proveedor',cliente_id:'Cliente',cantidad_recipientes:'Cantidad',moneda:'Moneda',fecha:'Fecha',nombre:'Nombre',telefono:'Teléfono',zona:'Zona',tipo:'Tipo',pais:'País',mercado:'Mercado',contacto:'Contacto',producto:'Producto',estado:'Estado',compra:'Compra',venta:'Venta'}[key]||key)
-const prettyError=e=>e?.code==='23505'?'Ya existe un registro con ese código o fecha y moneda. Revíselo antes de guardar.':e?.code==='42501'?'Su usuario no tiene permiso para esta operación.':e?.message||'No se pudo completar la operación. Inténtelo de nuevo.'
 
-function Login(){
- const [email,setEmail]=useState(''),[code,setCode]=useState(''),[sent,setSent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('')
- async function submit(e){e.preventDefault();setBusy(true);setError('');try{const result=sent?await supabase.auth.verifyOtp({email,token:code.trim(),type:'email'}):await supabase.auth.signInWithOtp({email});if(result.error)throw result.error;setSent(true)}catch(err){setError(prettyError(err))}finally{setBusy(false)}}
- return <main className="login"><form className="panel loginpanel" onSubmit={submit}><div className="brandmark">HN</div><h1>Gestión y Control</h1><p>Raíces y Tubérculos Huetar Norte S.A.</p><h2>Ingresar</h2><label>Correo electrónico<input type="email" autoComplete="email" required value={email} disabled={sent||busy} onChange={e=>setEmail(e.target.value)}/></label>{sent&&<><p>Revise su correo. Ingrese el código recibido; si el mensaje incluye un enlace, también puede abrirlo.</p><label>Código de verificación<input autoComplete="one-time-code" inputMode="numeric" required value={code} onChange={e=>setCode(e.target.value)}/></label></>}{error&&<p role="alert" className="formerror">{error}</p>}<button className="primary" disabled={busy}>{busy?'Espere…':sent?'Verificar e ingresar':'Enviar código a mi correo'}</button>{sent&&<button type="button" onClick={()=>{setSent(false);setCode('')}}>Cambiar correo o reenviar</button>}<p className="muted">Solo los usuarios autorizados pueden consultar y registrar operaciones.</p></form></main>
+const nav = [
+  ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
+  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Finanzas', WalletCards],
+  ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
+]
+
+
+const seed = {
+  'Órdenes de compra': [
+    {codigo:'OC-2026-0341', principal:'Randall Calvo', detalle:'Yuca · A rendimiento', estado:'Pendiente', monto:'₡ 4.830.000'},
+    {codigo:'OC-2026-0340', principal:'Agrosolano', detalle:'Yuca · Cosecha propia', estado:'En proceso', monto:'₡ 7.200.000'}
+  ],
+  'Boletas de entrada': [
+    {codigo:'BE-2026-0815', principal:'Agrosolano · El Concho', detalle:'420 cajas · Línea 1', estado:'En proceso', monto:'8.610 kg'},
+    {codigo:'BE-2026-0814', principal:'Luis Araya · Los Chiles', detalle:'285 cajas · Línea 2', estado:'Completada', monto:'5.842 kg'}
+  ],
+  'Órdenes de venta': [
+    {codigo:'OV-2026-0198', principal:'Grupo Plátanos López 3', detalle:'21 paletas · Estados Unidos', estado:'Preparando', monto:'US$ 27.540'},
+    {codigo:'OV-2026-0197', principal:'J&C', detalle:'1.320 cajas · Europa', estado:'Despachada', monto:'US$ 31.680'}
+  ],
+  Proveedores: [
+    {codigo:'PR-001', principal:'Agrosolano', detalle:'Productor propio · Zona Norte', estado:'Activo', monto:'Yuca · Ñampí'},
+    {codigo:'PR-002', principal:'Randall Calvo', detalle:'Agricultor · San Carlos', estado:'Activo', monto:'Yuca'}
+  ],
+  Clientes: [
+    {codigo:'CL-001', principal:'Grupo Plátanos López', detalle:'Estados Unidos', estado:'Activo', monto:'4–5 contenedores/sem'},
+    {codigo:'CL-002', principal:'J&C', detalle:'Europa', estado:'Activo', monto:'Crédito'}
+  ]
 }
+
+
+const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
+
 
 function App(){
- const [session,setSession]=useState(undefined),[profile,setProfile]=useState(undefined),[authError,setAuthError]=useState(''),[section,setSection]=useState('Resumen'),[open,setOpen]=useState(false),[revision,setRevision]=useState(0)
- useEffect(()=>{let alive=true;supabase.auth.getSession().then(({data,error})=>{if(alive){setSession(data.session);if(error)setAuthError(prettyError(error))}});const {data}=supabase.auth.onAuthStateChange((_event,current)=>{if(alive){setSession(current);setProfile(undefined)}});return()=>{alive=false;data.subscription.unsubscribe()}},[])
- useEffect(()=>{let alive=true;if(!session)return;setAuthError('');supabase.from('perfiles').select('id,nombre,rol,activo').eq('id',session.user.id).maybeSingle().then(({data,error})=>{if(alive){setProfile(data);if(error)setAuthError(prettyError(error))}});return()=>{alive=false}},[session,revision])
- async function logout(){const {error}=await supabase.auth.signOut();if(error)setAuthError(prettyError(error));else{setSession(null);setProfile(undefined)}}
- if(session===undefined)return <p role="status" className="loading">Comprobando sesión…</p>
- if(!session)return <Login/>
- if(profile===undefined&&!authError)return <p role="status" className="loading">Comprobando permisos…</p>
- if(!profile?.activo)return <main className="login"><section className="panel loginpanel"><h1>Acceso pendiente de activación</h1><p>Su correo está verificado. Falta asignarle un perfil de trabajo.</p><p>{session.user.email}</p>{authError&&<p role="alert">{authError}</p>}<button className="primary" onClick={()=>setRevision(r=>r+1)}>Comprobar activación</button><button onClick={logout}>Cerrar sesión</button></section></main>
- const office=['administrador','oficina'].includes(profile.rol)
- const names=Object.keys(configs).filter(n=>office||['Proveedores','Clientes','Boletas de entrada'].includes(n)&&profile.rol==='planta')
- const go=n=>{setSection(n);setOpen(false)}
- return <div className="app"><aside className={open?'sidebar open':'sidebar'}><div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" aria-label="Cerrar menú" onClick={()=>setOpen(false)}><X/></button></div><nav><button className={section==='Resumen'?'active':''} onClick={()=>go('Resumen')}><LayoutDashboard size={19}/>Resumen</button>{names.map(n=>{const Icon=configs[n].icon;return <button key={n} className={section===n?'active':''} onClick={()=>go(n)}><Icon size={19}/>{n}</button>})}</nav><div className="sidefoot"><p>{profile.nombre} · {profile.rol}</p><button onClick={logout}><LogOut size={19}/>Cerrar sesión</button></div></aside>{open&&<div className="scrim" onClick={()=>setOpen(false)}/>}<main><header><button className="menubtn" aria-label="Abrir menú" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div></header><div className="content">{authError&&<p role="alert" className="formerror">{authError}</p>}{section==='Resumen'?<Dashboard office={office} go={go}/>:names.includes(section)&&<Module key={section} name={section} profile={profile} office={office}/>}</div></main></div>
+  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false)
+  const rows = useMemo(()=> (seed[section]||[]).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[section,search])
+  const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
+  return <div className="app">
+    <aside className={open?'sidebar open':'sidebar'}>
+      <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
+      <nav>{nav.map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button><LogOut size={19}/>Cerrar sesión</button></div>
+    </aside>
+    {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
+    <main>
+      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
+      <div className="content">{section==='Resumen'?<Dashboard go={go}/>:<Module title={section} rows={rows} search={search} setSearch={setSearch} onNew={()=>setModal(true)}/>}</div>
+    </main>
+    {modal&&<QuickModal title={section} close={()=>setModal(false)}/>} 
+  </div>
 }
 
-function Dashboard({office,go}){
- const [counts,setCounts]=useState({}),[rates,setRates]=useState([]),[error,setError]=useState('')
- useEffect(()=>{let alive=true;async function load(){const tables=office?['proveedores','clientes','ordenes_compra','boletas_entrada','ordenes_venta']:['proveedores','clientes','boletas_entrada'];const results=await Promise.all(tables.map(async t=>{const r=await supabase.from(t).select('id',{count:'exact',head:true});if(r.error)throw r.error;return [t,r.count]}));if(alive)setCounts(Object.fromEntries(results));if(office){const {data,error}=await supabase.from('tipos_cambio').select('*').eq('fecha',today());if(error)throw error;if(alive)setRates(data)}}load().catch(e=>alive&&setError(prettyError(e)));return()=>{alive=false}},[office])
- return <><section className="hero"><div><span>{today()}</span><h2>Resumen de operaciones</h2><p>Registros guardados en Supabase.</p></div></section>{error&&<p role="alert" className="formerror">{error}</p>}<div className="stats">{Object.entries(counts).map(([k,v])=><article className="stat" key={k}><span>{Object.keys(configs).find(n=>configs[n].table===k)}</span><b>{v}</b><small>Registros guardados</small></article>)}</div>{office&&<section className="panel ratepanel"><h3>Tipo de cambio del día</h3>{rates.length?rates.map(r=><p key={r.id}><b>{r.moneda}</b> · Compra ₡{r.compra} · Venta ₡{r.venta}</p>):<p>No se ha registrado el tipo de cambio de hoy.</p>}<button className="primary" onClick={()=>go('Tipos de cambio')}>Registrar o actualizar</button><p className="muted">Los precios de las órdenes conservan la moneda original. La conversión de reportes financieros está pendiente.</p></section>}<section className="panel ratepanel"><h3>Desarrollo pendiente</h3><p>Producción y rendimientos, finanzas, conciliación bancaria y trabajadores todavía no están conectados en esta versión. Los importes de demostración fueron retirados.</p></section></>
+
+function Dashboard({go}){return <>
+  {!isSupabaseReady&&<div className="notice"><b>Modo de preparación:</b> la interfaz está funcionando. Falta conectar las claves privadas del proyecto Supabase.</div>}
+  <section className="hero"><div><span>SEMANA 38 · 2026</span><h2>Buenos días, Osvaldo</h2><p>Estado general de la exportadora y la operación agrícola.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
+  <div className="stats">
+    <Stat title="Ventas de la semana" value="US$ 248.760" note="8 contenedores" up icon={CircleDollarSign}/>
+    <Stat title="Compras de campo" value={money.format(42780000)} note="34 órdenes" icon={ShoppingCart}/>
+    <Stat title="Cuentas por cobrar" value="US$ 186.420" note="US$ 61.300 vencido" warning icon={ArrowUpRight}/>
+    <Stat title="Cuentas por pagar" value={money.format(68450000)} note="₡ 18.240.000 esta semana" icon={ArrowDownRight}/>
+  </div>
+  <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Producción y despachos de hoy</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>8</b><span>Boletas recibidas</span></div><div><b>42.680</b><span>kg procesados</span></div><div><b>3</b><span>Contenedores listos</span></div><div><b>86,4%</b><span>Rendimiento exportable</span></div></div></section>
+  <section className="panel"><div className="panelhead"><div><h3>Próximos movimientos</h3><p>Pagos y cobros prioritarios</p></div></div><ul className="moves"><li><i className="red"/><div><b>Pago a proveedores</b><span>Hoy · 14 facturas</span></div><strong>₡ 18,2 M</strong></li><li><i className="blue"/><div><b>Cobro Grupo Plátanos López</b><span>Mañana · 2 facturas</span></div><strong>US$ 54.900</strong></li><li><i className="yellow"/><div><b>Planilla semanal</b><span>Viernes · Campo y planta</span></div><strong>₡ 12,8 M</strong></li></ul></section></div>
+  <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Nueva compra</button><button onClick={()=>go('Boletas de entrada')}><Truck/>Recibir producto</button><button onClick={()=>go('Finanzas')}><WalletCards/>Registrar gasto</button><button onClick={()=>go('Bancos')}><Landmark/>Conciliar bancos</button></div></section>
+  </>}
+
+
+function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
+
+
+function Module({title,rows,search,setSearch,onNew}){return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div><button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button></div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{rows.length?<div className="rows">{rows.map(r=><article key={r.codigo}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className="arrow"><ChevronRight/></button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Módulo preparado</h3><p>Puede crear el primer registro de {title.toLowerCase()}.</p><button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button></div>}</section></>}
+
+
+const tableBySection = {
+  'Órdenes de compra':'ordenes_compra', 'Boletas de entrada':'boletas_entrada',
+  'Órdenes de venta':'ordenes_venta', Proveedores:'proveedores', Clientes:'clientes'
 }
 
-function Module({name,profile,office}){
- const config=configs[name],canEdit=office||name==='Boletas de entrada'
- const [rows,setRows]=useState([]),[lookups,setLookups]=useState({}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[message,setMessage]=useState(''),[search,setSearch]=useState(''),[editing,setEditing]=useState(null),[linesOrder,setLinesOrder]=useState(null)
- async function refresh(){setLoading(true);setError('');try{const sources=[...new Set(config.fields.filter(f=>f.source&&(!f.office||office)).map(f=>f.source))];const {data,error}=await supabase.from(config.table).select('*').order(config.table==='tipos_cambio'?'fecha':'creado_en',{ascending:false});if(error)throw error;const entries=await Promise.all(sources.map(async s=>{const {data,error}=await supabase.from(s).select(s==='ordenes_compra'?'id,codigo':'id,nombre');if(error)throw error;return [s,data]}));setRows(data);setLookups(Object.fromEntries(entries))}catch(e){setError(prettyError(e))}finally{setLoading(false)}}
- useEffect(()=>{refresh()},[])
- const relation=(key,value)=>{const f=config.fields.find(f=>f.key===key);const r=lookups[f?.source]?.find(r=>r.id===value);return r?.nombre||r?.codigo||value||'—'}
- const filtered=rows.filter(r=>config.columns.map(k=>relation(k,r[k])).join(' ').toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')))
- return <><div className="modulebar"><p>{rows.length} registros</p>{canEdit&&<button className="primary" onClick={()=>setEditing({})}><Plus size={18}/>Nuevo registro</button>}</div>{message&&<p role="status" className="success">{message}</p>}{error&&<div className="formerror" role="alert">{error}<button onClick={refresh}>Reintentar</button></div>}<section className="panel tablepanel"><div className="filters"><label>Buscar<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Código, nombre o estado"/></label></div>{loading?<p className="loading" role="status">Cargando registros…</p>:filtered.length?<div className="tableoverflow"><table className="datagrid"><thead><tr>{config.columns.map(k=><th key={k}>{labelFor(k)}</th>)}<th>Acciones</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id}>{config.columns.map(k=><td key={k}>{k==='fecha_hora'?new Date(r[k]).toLocaleString('es-CR',{timeZone:'America/Costa_Rica'}):relation(k,r[k])}</td>)}<td>{canEdit&&<button onClick={()=>setEditing(r)}>Editar</button>}{name==='Órdenes de venta'&&<button onClick={()=>setLinesOrder(r)}>Productos y cajas</button>}</td></tr>)}</tbody></table></div>:<div className="empty"><h3>{search?'Sin coincidencias':'Sin registros todavía'}</h3><p>{search?'Cambie la búsqueda.':'Los registros aparecerán aquí después de guardarlos.'}</p></div>}</section>{editing&&<RecordForm config={config} name={name} record={editing} lookups={lookups} profile={profile} office={office} close={()=>setEditing(null)} saved={()=>{setEditing(null);setMessage('Registro guardado en Supabase.');refresh()}}/>}{linesOrder&&<OrderLines order={linesOrder} close={()=>setLinesOrder(null)}/>}</>
-}
+function QuickModal({title,close}){
+  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),nombre:'',moneda:'CRC',monto:'',observaciones:''})
+  const [saving,setSaving]=useState(false); const [error,setError]=useState('')
+  const change=e=>setForm({...form,[e.target.name]:e.target.value})
+  const save=async()=>{
+    if(!form.nombre.trim()){setError('Escriba el nombre o la descripción.');return}
+    if(!supabase){setError('Falta conectar Supabase en la configuración de la aplicación.');return}
+    const table=tableBySection[title]
+    if(!table){setError(`El módulo ${title} todavía no tiene una tabla de guardado.`);return}
+    const codigo=`${title==='Órdenes de compra'?'OC':title==='Boletas de entrada'?'BE':'OV'}-${Date.now()}`
+    let payload
+    if(title==='Proveedores') payload={nombre:form.nombre.trim(),tipo:'Agricultor'}
+    else if(title==='Clientes') payload={nombre:form.nombre.trim()}
+    else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null}
+    else if(title==='Boletas de entrada') payload={codigo,fecha_hora:`${form.fecha}T12:00:00`,producto:form.nombre.trim(),observaciones:form.observaciones||null}
+    else payload={codigo,fecha:form.fecha,moneda:form.moneda,observaciones:form.observaciones||null}
+    setSaving(true);setError('')
+    const {error:saveError}=await supabase.from(table).insert(payload)
+    setSaving(false)
+    if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
+    close()
+  }
+  return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label><label className="wide">Nombre o descripción<input name="nombre" value={form.nombre} onChange={change} placeholder="Escriba aquí…"/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
 
-function RecordForm({config,name,record,lookups,profile,office,close,saved}){
- const initial=Object.fromEntries(config.fields.map(f=>[f.key,record[f.key]??(f.type==='date'?today():f.key==='moneda'?(name==='Órdenes de compra'?'CRC':'USD'):'')]))
- const [values,setValues]=useState(initial),[busy,setBusy]=useState(false),[error,setError]=useState('')
- async function save(e){e.preventDefault();setBusy(true);setError('');try{const payload={};for(const f of config.fields){if(f.office&&!office)continue;const value=values[f.key];payload[f.key]=value===''?null:f.type==='number'||f.key==='linea_proceso'?Number(value):value}
- if(!record.id&&config.prefix)payload.codigo=config.prefix+'-'+crypto.randomUUID().slice(0,12).toUpperCase()
- if(name==='Órdenes de compra'&&!record.id)payload.creado_por=profile.id
- if(name==='Boletas de entrada')payload.kg_estimados=Math.round(payload.cantidad_recipientes*payload.promedio_peso*1000)/1000
- const q=record.id?supabase.from(config.table).update(payload).eq('id',record.id):supabase.from(config.table).insert(payload)
- const {data,error}=await q.select('id').single();if(error)throw error;if(!data)throw new Error('No se confirmó el guardado.');saved()
- }catch(err){setError(prettyError(err))}finally{setBusy(false)}}
- return <div className="modalwrap"><form className="modal realform" onSubmit={save} role="dialog" aria-modal="true" aria-label={name}><div className="modalhead"><h2>{record.id?'Editar':'Nuevo'} · {name}</h2><button type="button" disabled={busy} aria-label="Cerrar formulario" onClick={close}><X/></button></div><div className="formgrid">{config.fields.filter(f=>!f.office||office).map(f=><label key={f.key} className={f.type==='textarea'?'wide':''}>{f.label}{f.required?' *':''}{f.type==='select'||f.type==='relation'?<select value={values[f.key]} required={f.required} disabled={busy} onChange={e=>setValues({...values,[f.key]:e.target.value})}><option value="">Seleccione…</option>{f.type==='relation'?(lookups[f.source]||[]).map(r=><option key={r.id} value={r.id}>{r.nombre||r.codigo}</option>):f.options.map(o=><option key={o}>{o}</option>)}</select>:f.type==='textarea'?<textarea rows="3" value={values[f.key]} disabled={busy} onChange={e=>setValues({...values,[f.key]:e.target.value})}/>:<input type={f.type} required={f.required} value={values[f.key]} min={f.type==='number'?(f.min??0):undefined} step={f.type==='number'?(f.step||'0.01'):undefined} disabled={busy} onChange={e=>setValues({...values,[f.key]:e.target.value})}/>}</label>)}{name==='Boletas de entrada'&&<p className="wide">Ingreso estimado: <strong>{((Number(values.cantidad_recipientes)||0)*(Number(values.promedio_peso)||0)).toLocaleString('es-CR',{maximumFractionDigits:3})} kg</strong></p>}</div>{error&&<p className="formerror" role="alert">{error}</p>}<div className="modalactions"><button type="button" disabled={busy} onClick={close}>Cancelar</button><button className="primary" disabled={busy}>{busy?'Guardando…':'Guardar registro'}</button></div></form></div>
-}
 
-function OrderLines({order,close}){
- const fresh={producto:'Yuca',presentacion_kg:'18',paletas:'',cajas_por_paleta:'',cantidad_cajas:'',precio_caja:''}
- const [rows,setRows]=useState([]),[v,setV]=useState(fresh),[editingId,setEditingId]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('')
- async function load(){const {data,error}=await supabase.from('ordenes_venta_lineas').select('*').eq('orden_venta_id',order.id);if(error)throw error;setRows(data)}
- useEffect(()=>{load().catch(e=>setError(prettyError(e)))},[])
- async function save(e){e.preventDefault();setBusy(true);setError('');setMessage('');try{const payload={orden_venta_id:order.id,producto:v.producto};for(const k of ['presentacion_kg','paletas','cajas_por_paleta','cantidad_cajas','precio_caja'])payload[k]=v[k]===''?null:Number(v[k]);const query=editingId?supabase.from('ordenes_venta_lineas').update(payload).eq('id',editingId).eq('orden_venta_id',order.id):supabase.from('ordenes_venta_lineas').insert(payload);const {error}=await query.select('id').single();if(error)throw error;await load();setV(fresh);setEditingId(null);setMessage('Línea guardada en Supabase.')}catch(e){setError(prettyError(e))}finally{setBusy(false)}}
- return <div className="modalwrap"><section className="modal realform" role="dialog" aria-modal="true" aria-label="Productos de la orden"><div className="modalhead"><h2>{order.codigo} · Productos</h2><button aria-label="Cerrar productos" disabled={busy} onClick={close}><X/></button></div><p>Precios en {order.moneda}. Cada presentación se guarda en una línea independiente.</p><div className="tableoverflow"><table className="datagrid"><thead><tr><th>Producto</th><th>Kg/caja</th><th>Cajas</th><th>Precio/caja</th><th>Total</th><th>Acción</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td>{r.producto}</td><td>{r.presentacion_kg}</td><td>{r.cantidad_cajas}</td><td>{r.precio_caja}</td><td>{r.total}</td><td><button disabled={busy} onClick={()=>{setEditingId(r.id);setV(Object.fromEntries(Object.keys(fresh).map(k=>[k,r[k]??''])));setMessage('')}}>Editar</button></td></tr>)}</tbody></table></div><p><b>Total: {new Intl.NumberFormat('es-CR',{style:'currency',currency:order.moneda}).format(rows.reduce((s,r)=>s+Number(r.total),0))}</b></p><form onSubmit={save}><h3>{editingId?'Editar línea':'Agregar producto'}</h3><div className="formgrid"><label>Producto<select value={v.producto} disabled={busy} onChange={e=>setV({...v,producto:e.target.value})}>{products.map(p=><option key={p}>{p}</option>)}</select></label>{[['presentacion_kg','Kg por caja','0.01',0.01,true],['paletas','Paletas','1',1,false],['cajas_por_paleta','Cajas por paleta','1',1,false],['cantidad_cajas','Cantidad total de cajas','1',1,true],['precio_caja',`Precio por caja (${order.moneda})`,'0.01',0,true]].map(([k,l,step,min,required])=><label key={k}>{l}<input type="number" inputMode="decimal" min={min} step={step} required={required} value={v[k]} disabled={busy} onChange={e=>setV({...v,[k]:e.target.value})}/></label>)}</div><button type="button" disabled={busy||!v.paletas||!v.cajas_por_paleta} onClick={()=>setV({...v,cantidad_cajas:String(Number(v.paletas)*Number(v.cajas_por_paleta))})}>Calcular cajas desde paletas</button><p className="muted">Puede escribir cualquier cantidad entera de cajas, por ejemplo 156.</p>{error&&<p className="formerror" role="alert">{error}</p>}{message&&<p className="success" role="status">{message}</p>}<div className="modalactions">{editingId&&<button type="button" disabled={busy} onClick={()=>{setEditingId(null);setV(fresh)}}>Cancelar edición</button>}<button className="primary" disabled={busy}>{busy?'Guardando…':editingId?'Guardar cambios':'Guardar línea'}</button></div></form></section></div>
-}
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<App/>)
