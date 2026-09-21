@@ -73,10 +73,41 @@ alter table public.ordenes_venta enable row level security;
 alter table public.ordenes_venta_lineas enable row level security;
 alter table public.tipos_cambio enable row level security;
 
-create policy "usuarios autenticados leen proveedores" on public.proveedores for select to authenticated using (true);
-create policy "usuarios autenticados leen clientes" on public.clientes for select to authenticated using (true);
-create policy "usuarios autenticados leen operaciones" on public.ordenes_compra for select to authenticated using (true);
-create policy "usuarios autenticados leen boletas" on public.boletas_entrada for select to authenticated using (true);
-create policy "usuarios autenticados leen ventas" on public.ordenes_venta for select to authenticated using (true);
-create policy "usuarios autenticados leen lineas" on public.ordenes_venta_lineas for select to authenticated using (true);
-create policy "usuarios autenticados leen tipos de cambio" on public.tipos_cambio for select to authenticated using (true);
+
+revoke all on public.perfiles from anon, authenticated;
+grant select on public.perfiles to authenticated;
+create policy perfil_propio on public.perfiles for select to authenticated using (id = (select auth.uid()));
+
+revoke all on public.proveedores from anon, authenticated;
+grant select, insert, update, delete on public.proveedores to authenticated;
+create policy gestion_oficina on public.proveedores for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.clientes from anon, authenticated;
+grant select, insert, update, delete on public.clientes to authenticated;
+create policy gestion_oficina on public.clientes for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.ordenes_compra from anon, authenticated;
+grant select, insert, update, delete on public.ordenes_compra to authenticated;
+create policy gestion_oficina on public.ordenes_compra for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.boletas_entrada from anon, authenticated;
+grant select, insert, update, delete on public.boletas_entrada to authenticated;
+create policy gestion_oficina on public.boletas_entrada for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.ordenes_venta from anon, authenticated;
+grant select, insert, update, delete on public.ordenes_venta to authenticated;
+create policy gestion_oficina on public.ordenes_venta for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.ordenes_venta_lineas from anon, authenticated;
+grant select, insert, update, delete on public.ordenes_venta_lineas to authenticated;
+create policy gestion_oficina on public.ordenes_venta_lineas for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+revoke all on public.tipos_cambio from anon, authenticated;
+grant select, insert, update, delete on public.tipos_cambio to authenticated;
+create policy gestion_oficina on public.tipos_cambio for all to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina'))) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol in ('administrador','oficina')));
+create policy lectura_planta on public.proveedores for select to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta'));
+create policy lectura_planta on public.clientes for select to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta'));
+create policy lectura_planta on public.boletas_entrada for select to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta'));
+create policy ingreso_planta on public.boletas_entrada for insert to authenticated with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta'));
+create policy actualizacion_planta on public.boletas_entrada for update to authenticated using (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta')) with check (exists (select 1 from public.perfiles p where p.id = (select auth.uid()) and p.activo and p.rol = 'planta'));
+create index on public.ordenes_compra(proveedor_id);
+create index on public.ordenes_compra(creado_por);
+create index on public.boletas_entrada(orden_compra_id);
+create index on public.boletas_entrada(proveedor_id);
+create index on public.ordenes_venta(cliente_id);
+create index on public.ordenes_venta_lineas(orden_venta_id);
+
