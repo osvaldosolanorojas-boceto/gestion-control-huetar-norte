@@ -12,56 +12,31 @@ const nav = [
 ]
 
 
-const seed = {
-  'Órdenes de compra': [
-    {codigo:'OC-2026-0341', principal:'Randall Calvo', detalle:'Yuca · A rendimiento', estado:'Pendiente', monto:'₡ 4.830.000'},
-    {codigo:'OC-2026-0340', principal:'Agrosolano', detalle:'Yuca · Cosecha propia', estado:'En proceso', monto:'₡ 7.200.000'}
-  ],
-  'Boletas de entrada': [
-    {codigo:'BE-2026-0815', principal:'Agrosolano · El Concho', detalle:'420 cajas · Línea 1', estado:'En proceso', monto:'8.610 kg'},
-    {codigo:'BE-2026-0814', principal:'Luis Araya · Los Chiles', detalle:'285 cajas · Línea 2', estado:'Completada', monto:'5.842 kg'}
-  ],
-  'Órdenes de venta': [
-    {codigo:'OV-2026-0198', principal:'Grupo Plátanos López 3', detalle:'21 paletas · Estados Unidos', estado:'Preparando', monto:'US$ 27.540'},
-    {codigo:'OV-2026-0197', principal:'J&C', detalle:'1.320 cajas · Europa', estado:'Despachada', monto:'US$ 31.680'}
-  ],
-  Proveedores: [
-    {codigo:'PR-001', principal:'Agrosolano', detalle:'Productor propio · Zona Norte', estado:'Activo', monto:'Yuca · Ñampí'},
-    {codigo:'PR-002', principal:'Randall Calvo', detalle:'Agricultor · San Carlos', estado:'Activo', monto:'Yuca'}
-  ],
-  Clientes: [
-    {codigo:'CL-001', principal:'Grupo Plátanos López', detalle:'Estados Unidos', estado:'Activo', monto:'4–5 contenedores/sem'},
-    {codigo:'CL-002', principal:'J&C', detalle:'Europa', estado:'Activo', monto:'Crédito'}
-  ]
-}
-
-
 const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
 
 
-function App(){
-  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false)
-  const rows = useMemo(()=> (seed[section]||[]).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[section,search])
+function App({profile}){
+  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [refresh,setRefresh]=useState(0)
   const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
       <nav>{nav.map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
-      <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button><LogOut size={19}/>Cerrar sesión</button></div>
+      <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button onClick={()=>supabase.auth.signOut()}><LogOut size={19}/>Cerrar sesión</button></div>
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{section==='Resumen'?<Dashboard go={go}/>:<Module title={section} rows={rows} search={search} setSearch={setSearch} onNew={()=>setModal(true)}/>}</div>
+      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>setModal(true)} refresh={refresh}/>}</div>
     </main>
-    {modal&&<QuickModal title={section} close={()=>setModal(false)}/>} 
+    {modal&&<QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>}
   </div>
 }
 
 
-function Dashboard({go}){return <>
+function Dashboard({go,profile}){return <>
   {!isSupabaseReady&&<div className="notice"><b>Modo de preparación:</b> la interfaz está funcionando. Falta conectar las claves privadas del proyecto Supabase.</div>}
-  <section className="hero"><div><span>SEMANA 38 · 2026</span><h2>Buenos días, Osvaldo</h2><p>Estado general de la exportadora y la operación agrícola.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
+  <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>La sesión está conectada de forma segura con Supabase.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
   <div className="stats">
     <Stat title="Ventas de la semana" value="US$ 248.760" note="8 contenedores" up icon={CircleDollarSign}/>
     <Stat title="Compras de campo" value={money.format(42780000)} note="34 órdenes" icon={ShoppingCart}/>
@@ -77,7 +52,25 @@ function Dashboard({go}){return <>
 function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
 
 
-function Module({title,rows,search,setSearch,onNew}){return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div><button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button></div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{rows.length?<div className="rows">{rows.map(r=><article key={r.codigo}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className="arrow"><ChevronRight/></button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Módulo preparado</h3><p>Puede crear el primer registro de {title.toLowerCase()}.</p><button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button></div>}</section></>}
+function Module({title,search,setSearch,onNew,refresh}){
+  const [items,setItems]=useState([]); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
+  const table=tableBySection[title]
+  useEffect(()=>{let active=true;if(!table){setItems([]);return}
+    setLoading(true);setError('')
+    supabase.from(table).select('*').order('creado_en',{ascending:false}).limit(100).then(({data,error:loadError})=>{
+      if(!active)return;setLoading(false);if(loadError){setError('No se pudieron cargar los datos.');return}setItems(data||[])
+    });return()=>{active=false}
+  },[table,refresh])
+  const rows=useMemo(()=>items.map((item,index)=>({
+    key:item.id||index,
+    codigo:item.codigo||`${title==='Proveedores'?'PR':'CL'}-${String(index+1).padStart(3,'0')}`,
+    principal:item.nombre||item.producto||item.mercado||'Registro',
+    detalle:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
+    estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
+    monto:item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
+  })).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[items,search,title])
+  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className="arrow"><ChevronRight/></button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
+}
 
 
 const tableBySection = {
@@ -85,7 +78,7 @@ const tableBySection = {
   'Órdenes de venta':'ordenes_venta', Proveedores:'proveedores', Clientes:'clientes'
 }
 
-function QuickModal({title,close}){
+function QuickModal({title,close,onSaved,userId}){
   const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),nombre:'',moneda:'CRC',monto:'',observaciones:''})
   const [saving,setSaving]=useState(false); const [error,setError]=useState('')
   const change=e=>setForm({...form,[e.target.name]:e.target.value})
@@ -98,14 +91,14 @@ function QuickModal({title,close}){
     let payload
     if(title==='Proveedores') payload={nombre:form.nombre.trim(),tipo:'Agricultor'}
     else if(title==='Clientes') payload={nombre:form.nombre.trim()}
-    else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null}
+    else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null,creado_por:userId}
     else if(title==='Boletas de entrada') payload={codigo,fecha_hora:`${form.fecha}T12:00:00`,producto:form.nombre.trim(),observaciones:form.observaciones||null}
     else payload={codigo,fecha:form.fecha,moneda:form.moneda,observaciones:form.observaciones||null}
     setSaving(true);setError('')
     const {error:saveError}=await supabase.from(table).insert(payload)
     setSaving(false)
     if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
-    close()
+    onSaved()
   }
   return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label><label className="wide">Nombre o descripción<input name="nombre" value={form.nombre} onChange={change} placeholder="Escriba aquí…"/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
 
@@ -124,12 +117,22 @@ function SetPassword({done}){
 
 function Root(){
   const [session,setSession]=useState(undefined)
+  const [profile,setProfile]=useState(undefined); const [accessError,setAccessError]=useState('')
   const [invited,setInvited]=useState(()=>window.location.hash.includes('type=invite'))
   useEffect(()=>{if(!supabase){setSession(null);return}supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));return()=>subscription.unsubscribe()},[])
+  useEffect(()=>{let active=true;if(!session){setProfile(undefined);return}
+    supabase.from('perfiles').select('id,nombre,rol,activo').eq('id',session.user.id).single().then(({data,error})=>{
+      if(!active)return
+      if(error||!data||!data.activo){setAccessError('Su cuenta no tiene acceso activo. Comuníquese con el administrador.');setProfile(null);return}
+      setAccessError('');setProfile(data)
+    });return()=>{active=false}
+  },[session])
   if(session===undefined)return <div className="authpage"><div className="authcard"><b>Abriendo Gestión y Control…</b></div></div>
   if(!session)return <AccessScreen/>
   if(invited)return <SetPassword done={()=>setInvited(false)}/>
-  return <App/>
+  if(profile===undefined)return <div className="authpage"><div className="authcard"><b>Verificando permisos…</b></div></div>
+  if(!profile)return <div className="authpage"><div className="authcard"><h1>Acceso no autorizado</h1><p>{accessError}</p><button className="primary" onClick={()=>supabase.auth.signOut()}>Cerrar sesión</button></div></div>
+  return <App profile={profile}/>
 }
 
 createRoot(document.getElementById('root')).render(<Root/>)

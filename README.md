@@ -10,10 +10,10 @@ cp .env.example .env
 npm run dev
 ```
 
-Configure `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en `.env`. Ejecute `supabase/schema.sql` en el editor SQL de Supabase antes de ingresar datos reales.
+Configure `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` en `.env`. La aplicación publicada usa solamente la clave publicable; nunca requiere una clave secreta en el navegador. Ejecute `supabase/schema.sql` en un proyecto nuevo antes de ingresar datos reales.
 
 ## Seguridad
 
 - El archivo `.env` no se guarda en GitHub.
 - El esquema habilita RLS en todas las tablas operativas.
-- Los permisos de escritura por rol se completan al conectar el primer usuario administrador.
+- Cada sesión se valida contra `public.perfiles`; una cuenta sin perfil activo no puede abrir la aplicación.
