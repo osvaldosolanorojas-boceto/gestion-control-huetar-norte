@@ -29,7 +29,9 @@ function App({profile}){
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
       <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>setModal(true)} refresh={refresh}/>}</div>
     </main>
-    {modal&&<QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>}
+    {modal&&(section==='Órdenes de venta'
+      ? <SalesOrderModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
+      : <QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>)}
   </div>
 }
 
@@ -76,6 +78,50 @@ function Module({title,search,setSearch,onNew,refresh}){
 const tableBySection = {
   'Órdenes de compra':'ordenes_compra', 'Boletas de entrada':'boletas_entrada',
   'Órdenes de venta':'ordenes_venta', Proveedores:'proveedores', Clientes:'clientes'
+}
+
+const emptySaleLine = () => ({producto:'Yuca',presentacion_kg:'18',paletas:'1',cajas_por_paleta:'60',precio_caja:''})
+const usd = new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD',minimumFractionDigits:2})
+
+function SalesOrderModal({close,onSaved}){
+  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),mercado:'Estados Unidos',contenedor:'',observaciones:''})
+  const [lines,setLines]=useState([emptySaleLine()]); const [saving,setSaving]=useState(false); const [error,setError]=useState('')
+  const change=e=>setForm({...form,[e.target.name]:e.target.value})
+  const changeLine=(index,field,value)=>setLines(current=>current.map((line,i)=>i===index?{...line,[field]:value}:line))
+  const lineBoxes=line=>(Number(line.paletas)||0)*(Number(line.cajas_por_paleta)||0)
+  const lineTotal=line=>lineBoxes(line)*(Number(String(line.precio_caja).replace(',','.'))||0)
+  const totalBoxes=lines.reduce((sum,line)=>sum+lineBoxes(line),0)
+  const total=lines.reduce((sum,line)=>sum+lineTotal(line),0)
+  const save=async()=>{
+    if(lines.some(line=>!Number.isInteger(Number(line.cajas_por_paleta))||Number(line.cajas_por_paleta)<=0)){
+      setError('Escriba una cantidad válida de cajas por paleta.');return
+    }
+    if(lines.some(line=>Number(String(line.precio_caja).replace(',','.'))<=0)){
+      setError('Escriba el precio por caja en cada producto.');return
+    }
+    setSaving(true);setError('')
+    const codigo=`OV-${Date.now()}`
+    const {data:order,error:orderError}=await supabase.from('ordenes_venta').insert({codigo,fecha:form.fecha,mercado:form.mercado,contenedor:form.contenedor||null,moneda:'USD',observaciones:form.observaciones||null}).select('id').single()
+    if(orderError){setSaving(false);setError(`No se pudo guardar: ${orderError.message}`);return}
+    const payload=lines.map(line=>({orden_venta_id:order.id,producto:line.producto,presentacion_kg:Number(line.presentacion_kg),paletas:Number(line.paletas),cajas_por_paleta:Number(line.cajas_por_paleta),cantidad_cajas:lineBoxes(line),precio_caja:Number(String(line.precio_caja).replace(',','.'))}))
+    const {error:linesError}=await supabase.from('ordenes_venta_lineas').insert(payload)
+    if(linesError){await supabase.from('ordenes_venta').delete().eq('id',order.id);setSaving(false);setError(`No se pudieron guardar los productos: ${linesError.message}`);return}
+    setSaving(false);onSaved()
+  }
+  return <div className="modalwrap"><div className="modal realform salesform"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>Orden de venta</h2></div><button onClick={close}><X/></button></div>
+    <div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Mercado<select name="mercado" value={form.mercado} onChange={change}><option>Estados Unidos</option><option>Europa</option><option>Canadá</option><option>Costa Rica</option></select></label><label className="wide">Contenedor<input name="contenedor" value={form.contenedor} onChange={change} placeholder="Número o referencia"/></label></div>
+    <div className="sale-lines">{lines.map((line,index)=><section className="sale-line" key={index}><div className="linehead"><b>Producto {index+1}</b>{lines.length>1&&<button className="remove" type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))}>Quitar producto</button>}</div><div className="formgrid">
+      <label>Producto<select value={line.producto} onChange={e=>changeLine(index,'producto',e.target.value)}><option>Yuca</option><option>Ñampí</option><option>Cabeza de ñampí</option><option>Malanga lila</option><option>Malanga blanca</option><option>Camote</option></select></label>
+      <label>Kilos por caja<input type="number" min="0.01" step="0.01" inputMode="decimal" value={line.presentacion_kg} onChange={e=>changeLine(index,'presentacion_kg',e.target.value)}/></label>
+      <label>Cantidad de paletas<select value={line.paletas} onChange={e=>changeLine(index,'paletas',e.target.value)}>{Array.from({length:22},(_,i)=><option key={i+1} value={i+1}>{i+1} {i===0?'paleta':'paletas'}</option>)}</select></label>
+      <label>Cajas por paleta<input type="number" min="1" step="1" inputMode="numeric" value={line.cajas_por_paleta} onChange={e=>changeLine(index,'cajas_por_paleta',e.target.value)} placeholder="Escriba la cantidad"/></label>
+      <label className="wide">Precio por caja (USD)<input type="number" min="0.01" step="0.01" inputMode="decimal" value={line.precio_caja} onChange={e=>changeLine(index,'precio_caja',e.target.value)} placeholder="Ejemplo: 4,50"/></label>
+    </div><div className="line-total"><span><small>TOTAL CALCULADO</small><b>{lineBoxes(line).toLocaleString('es-CR')} cajas · {line.paletas} paletas</b></span><strong>Subtotal: {usd.format(lineTotal(line))}</strong></div></section>)}</div>
+    <button className="addline" type="button" onClick={()=>setLines(current=>[...current,emptySaleLine()])}><Plus size={18}/>Agregar producto</button>
+    <label className="notes">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label>
+    <div className="order-total"><span>{totalBoxes.toLocaleString('es-CR')} cajas</span><b>Total de la orden: {usd.format(total)}</b></div>
+    {error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar orden'}</button></div>
+  </div></div>
 }
 
 function QuickModal({title,close,onSaved,userId}){
