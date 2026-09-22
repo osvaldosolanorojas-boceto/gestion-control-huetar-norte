@@ -33,7 +33,7 @@ function App({profile}){
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
       : section==='Órdenes de compra'
-        ? <PurchaseOrderModal userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
+        ? <PurchaseOrderModal order={editingClient} userId={profile.id} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
       : section==='Clientes'
         ? <ClientModal client={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
         : <QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>)}
@@ -72,12 +72,12 @@ function Module({title,search,setSearch,onNew,onEdit,refresh}){
     key:item.id||index,
     item,
     codigo:item.codigo||`${title==='Proveedores'?'PR':'CL'}-${String(index+1).padStart(3,'0')}`,
-    principal:item.nombre||item.producto||item.mercado||'Registro',
+    principal:item.nombre||item.productor_nombre||item.producto||item.mercado||'Registro',
     detalle:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
     estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
     monto:item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
   })).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[items,search,title])
-  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={title==='Clientes'?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={title==='Clientes'?`Editar cliente ${r.principal}`:`Abrir ${r.principal}`} disabled={title!=='Clientes'}>{title==='Clientes'?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
+  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={['Clientes','Órdenes de compra'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra'].includes(title)}>{['Clientes','Órdenes de compra'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
 }
 
 
