@@ -84,8 +84,12 @@ const emptySaleLine = () => ({producto:'Yuca',presentacion_kg:'18',paletas:'1',c
 const usd = new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD',minimumFractionDigits:2})
 
 function SalesOrderModal({close,onSaved}){
-  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),mercado:'Estados Unidos',contenedor:'',observaciones:''})
+  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),cliente_id:'',mercado:'Estados Unidos',contenedor:'',observaciones:''})
+  const [clientes,setClientes]=useState([]); const [loadingClientes,setLoadingClientes]=useState(true)
   const [lines,setLines]=useState([emptySaleLine()]); const [saving,setSaving]=useState(false); const [error,setError]=useState('')
+  useEffect(()=>{let active=true;supabase.from('clientes').select('id,nombre').eq('activo',true).order('nombre').then(({data,error:loadError})=>{
+    if(!active)return;setLoadingClientes(false);if(loadError){setError('No se pudieron cargar los clientes.');return}setClientes(data||[])
+  });return()=>{active=false}},[])
   const change=e=>setForm({...form,[e.target.name]:e.target.value})
   const changeLine=(index,field,value)=>setLines(current=>current.map((line,i)=>i===index?{...line,[field]:value}:line))
   const lineBoxes=line=>(Number(line.paletas)||0)*(Number(line.cajas_por_paleta)||0)
@@ -93,6 +97,7 @@ function SalesOrderModal({close,onSaved}){
   const totalBoxes=lines.reduce((sum,line)=>sum+lineBoxes(line),0)
   const total=lines.reduce((sum,line)=>sum+lineTotal(line),0)
   const save=async()=>{
+    if(!form.cliente_id){setError('Seleccione el cliente de esta orden de venta.');return}
     if(lines.some(line=>!Number.isInteger(Number(line.cajas_por_paleta))||Number(line.cajas_por_paleta)<=0)){
       setError('Escriba una cantidad válida de cajas por paleta.');return
     }
@@ -101,7 +106,7 @@ function SalesOrderModal({close,onSaved}){
     }
     setSaving(true);setError('')
     const codigo=`OV-${Date.now()}`
-    const {data:order,error:orderError}=await supabase.from('ordenes_venta').insert({codigo,fecha:form.fecha,mercado:form.mercado,contenedor:form.contenedor||null,moneda:'USD',observaciones:form.observaciones||null}).select('id').single()
+    const {data:order,error:orderError}=await supabase.from('ordenes_venta').insert({codigo,fecha:form.fecha,cliente_id:form.cliente_id,mercado:form.mercado,contenedor:form.contenedor||null,moneda:'USD',observaciones:form.observaciones||null}).select('id').single()
     if(orderError){setSaving(false);setError(`No se pudo guardar: ${orderError.message}`);return}
     const payload=lines.map(line=>({orden_venta_id:order.id,producto:line.producto,presentacion_kg:Number(line.presentacion_kg),paletas:Number(line.paletas),cajas_por_paleta:Number(line.cajas_por_paleta),cantidad_cajas:lineBoxes(line),precio_caja:Number(String(line.precio_caja).replace(',','.'))}))
     const {error:linesError}=await supabase.from('ordenes_venta_lineas').insert(payload)
@@ -109,7 +114,7 @@ function SalesOrderModal({close,onSaved}){
     setSaving(false);onSaved()
   }
   return <div className="modalwrap"><div className="modal realform salesform"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>Orden de venta</h2></div><button onClick={close}><X/></button></div>
-    <div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Mercado<select name="mercado" value={form.mercado} onChange={change}><option>Estados Unidos</option><option>Europa</option><option>Canadá</option><option>Costa Rica</option></select></label><label className="wide">Contenedor<input name="contenedor" value={form.contenedor} onChange={change} placeholder="Número o referencia"/></label></div>
+    <div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Cliente<select name="cliente_id" value={form.cliente_id} onChange={change} disabled={loadingClientes}><option value="">{loadingClientes?'Cargando clientes…':'Seleccione un cliente'}</option>{clientes.map(cliente=><option key={cliente.id} value={cliente.id}>{cliente.nombre}</option>)}</select></label><label>Mercado<select name="mercado" value={form.mercado} onChange={change}><option>Estados Unidos</option><option>Europa</option><option>Canadá</option><option>Costa Rica</option></select></label><label>Contenedor<input name="contenedor" value={form.contenedor} onChange={change} placeholder="Número o referencia"/></label></div>
     <div className="sale-lines">{lines.map((line,index)=><section className="sale-line" key={index}><div className="linehead"><b>Producto {index+1}</b>{lines.length>1&&<button className="remove" type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))}>Quitar producto</button>}</div><div className="formgrid">
       <label>Producto<select value={line.producto} onChange={e=>changeLine(index,'producto',e.target.value)}><option>Yuca</option><option>Ñampí</option><option>Cabeza de ñampí</option><option>Malanga lila</option><option>Malanga blanca</option><option>Camote</option></select></label>
       <label>Kilos por caja<input type="number" min="0.01" step="0.01" inputMode="decimal" value={line.presentacion_kg} onChange={e=>changeLine(index,'presentacion_kg',e.target.value)}/></label>
@@ -125,10 +130,15 @@ function SalesOrderModal({close,onSaved}){
 }
 
 function QuickModal({title,close,onSaved,userId}){
-  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),nombre:'',moneda:'CRC',monto:'',observaciones:''})
+  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),proveedor_id:'',nombre:'',moneda:'CRC',monto:'',observaciones:''})
+  const [proveedores,setProveedores]=useState([]); const [loadingProveedores,setLoadingProveedores]=useState(title==='Órdenes de compra')
   const [saving,setSaving]=useState(false); const [error,setError]=useState('')
+  useEffect(()=>{if(title!=='Órdenes de compra')return;let active=true;supabase.from('proveedores').select('id,nombre').eq('activo',true).order('nombre').then(({data,error:loadError})=>{
+    if(!active)return;setLoadingProveedores(false);if(loadError){setError('No se pudieron cargar los proveedores.');return}setProveedores(data||[])
+  });return()=>{active=false}},[title])
   const change=e=>setForm({...form,[e.target.name]:e.target.value})
   const save=async()=>{
+    if(title==='Órdenes de compra'&&!form.proveedor_id){setError('Seleccione el proveedor de esta orden de compra.');return}
     if(!form.nombre.trim()){setError('Escriba el nombre o la descripción.');return}
     if(!supabase){setError('Falta conectar Supabase en la configuración de la aplicación.');return}
     const table=tableBySection[title]
@@ -137,7 +147,7 @@ function QuickModal({title,close,onSaved,userId}){
     let payload
     if(title==='Proveedores') payload={nombre:form.nombre.trim(),tipo:'Agricultor'}
     else if(title==='Clientes') payload={nombre:form.nombre.trim()}
-    else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null,creado_por:userId}
+    else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,proveedor_id:form.proveedor_id,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null,creado_por:userId}
     else if(title==='Boletas de entrada') payload={codigo,fecha_hora:`${form.fecha}T12:00:00`,producto:form.nombre.trim(),observaciones:form.observaciones||null}
     else payload={codigo,fecha:form.fecha,moneda:form.moneda,observaciones:form.observaciones||null}
     setSaving(true);setError('')
@@ -146,7 +156,7 @@ function QuickModal({title,close,onSaved,userId}){
     if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
     onSaved()
   }
-  return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label><label className="wide">Nombre o descripción<input name="nombre" value={form.nombre} onChange={change} placeholder="Escriba aquí…"/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
+  return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label>{title==='Órdenes de compra'&&<label className="wide">Proveedor<select name="proveedor_id" value={form.proveedor_id} onChange={change} disabled={loadingProveedores}><option value="">{loadingProveedores?'Cargando proveedores…':'Seleccione un proveedor'}</option>{proveedores.map(proveedor=><option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>)}</select></label>}<label className="wide">{title==='Órdenes de compra'?'Producto':'Nombre o descripción'}<input name="nombre" value={form.nombre} onChange={change} placeholder={title==='Órdenes de compra'?'Escriba el producto…':'Escriba aquí…'}/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
 
 
 function AccessScreen(){
