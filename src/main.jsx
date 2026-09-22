@@ -165,9 +165,24 @@ function SetPassword({done}){
 function Root(){
   const [session,setSession]=useState(undefined)
   const [profile,setProfile]=useState(undefined); const [accessError,setAccessError]=useState('')
-  const [invited,setInvited]=useState(()=>window.location.hash.includes('type=invite'))
-  const [recovering,setRecovering]=useState(()=>window.location.hash.includes('type=recovery'))
-  useEffect(()=>{if(!supabase){setSession(null);return}supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{setSession(next);if(event==='PASSWORD_RECOVERY')setRecovering(true)});return()=>subscription.unsubscribe()},[])
+  const authLinkType=()=>{
+    const hash=new URLSearchParams(window.location.hash.replace(/^#/,''))
+    const query=new URLSearchParams(window.location.search)
+    return hash.get('type')||query.get('type')||''
+  }
+  const [invited,setInvited]=useState(()=>authLinkType()==='invite')
+  const [recovering,setRecovering]=useState(()=>authLinkType()==='recovery')
+  useEffect(()=>{
+    if(!supabase){setSession(null);return}
+    let active=true
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{
+      if(!active)return
+      setSession(next)
+      if(event==='PASSWORD_RECOVERY')setRecovering(true)
+    })
+    supabase.auth.getSession().then(({data})=>{if(active)setSession(data.session)})
+    return()=>{active=false;subscription.unsubscribe()}
+  },[])
   useEffect(()=>{let active=true;if(!session){setProfile(undefined);return}
     supabase.from('perfiles').select('id,nombre,rol,activo').eq('id',session.user.id).single().then(({data,error})=>{
       if(!active)return
@@ -175,9 +190,10 @@ function Root(){
       setAccessError('');setProfile(data)
     });return()=>{active=false}
   },[session])
+  if((invited||recovering)&&session===undefined)return <div className="authpage"><div className="authcard"><b>Validando el enlace seguro…</b></div></div>
   if(session===undefined)return <div className="authpage"><div className="authcard"><b>Abriendo Gestión y Control…</b></div></div>
+  if((invited||recovering)&&session)return <SetPassword done={()=>{setInvited(false);setRecovering(false);window.history.replaceState({},document.title,window.location.pathname)}}/>
   if(!session)return <AccessScreen/>
-  if(invited||recovering)return <SetPassword done={()=>{setInvited(false);setRecovering(false);window.history.replaceState({},document.title,window.location.pathname)}}/>
   if(profile===undefined)return <div className="authpage"><div className="authcard"><b>Verificando permisos…</b></div></div>
   if(!profile)return <div className="authpage"><div className="authcard"><h1>Acceso no autorizado</h1><p>{accessError}</p><button className="primary" onClick={()=>supabase.auth.signOut()}>Cerrar sesión</button></div></div>
   return <App profile={profile}/>
