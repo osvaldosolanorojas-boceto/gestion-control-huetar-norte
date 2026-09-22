@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LayoutDashboard, ShoppingCart, Truck, Factory, WalletCards, Users, UserRound, Landmark, Menu, X, Plus, Search, ChevronRight, ArrowUpRight, ArrowDownRight, CircleDollarSign, PackageCheck, Settings, LogOut } from 'lucide-react'
-import { isSupabaseReady, supabase } from './supabase'
+import { initialAuthLinkType, isSupabaseReady, supabase } from './supabase'
 import './styles.css'
 
 
@@ -165,13 +165,8 @@ function SetPassword({done}){
 function Root(){
   const [session,setSession]=useState(undefined)
   const [profile,setProfile]=useState(undefined); const [accessError,setAccessError]=useState('')
-  const authLinkType=()=>{
-    const hash=new URLSearchParams(window.location.hash.replace(/^#/,''))
-    const query=new URLSearchParams(window.location.search)
-    return hash.get('type')||query.get('type')||''
-  }
-  const [invited,setInvited]=useState(()=>authLinkType()==='invite')
-  const [recovering,setRecovering]=useState(()=>authLinkType()==='recovery')
+  const [invited,setInvited]=useState(()=>initialAuthLinkType==='invite')
+  const [recovering,setRecovering]=useState(()=>initialAuthLinkType==='recovery')
   useEffect(()=>{
     if(!supabase){setSession(null);return}
     let active=true
