@@ -16,7 +16,7 @@ const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',max
 
 
 function App({profile}){
-  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [refresh,setRefresh]=useState(0)
+  const [section,setSection]=useState('Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [refresh,setRefresh]=useState(0)
   const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
@@ -27,12 +27,12 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>setModal(true)} refresh={refresh}/>}</div>
+      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
       : section==='Clientes'
-        ? <ClientModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
+        ? <ClientModal client={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
         : <QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>)}
   </div>
 }
@@ -56,7 +56,7 @@ function Dashboard({go,profile}){return <>
 function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
 
 
-function Module({title,search,setSearch,onNew,refresh}){
+function Module({title,search,setSearch,onNew,onEdit,refresh}){
   const [items,setItems]=useState([]); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
@@ -67,13 +67,14 @@ function Module({title,search,setSearch,onNew,refresh}){
   },[table,refresh])
   const rows=useMemo(()=>items.map((item,index)=>({
     key:item.id||index,
+    item,
     codigo:item.codigo||`${title==='Proveedores'?'PR':'CL'}-${String(index+1).padStart(3,'0')}`,
     principal:item.nombre||item.producto||item.mercado||'Registro',
     detalle:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
     estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
     monto:item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
   })).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[items,search,title])
-  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className="arrow"><ChevronRight/></button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
+  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={title==='Clientes'?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={title==='Clientes'?`Editar cliente ${r.principal}`:`Abrir ${r.principal}`} disabled={title!=='Clientes'}>{title==='Clientes'?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
 }
 
 
@@ -131,8 +132,9 @@ function SalesOrderModal({close,onSaved}){
   </div></div>
 }
 
-function ClientModal({close,onSaved}){
-  const [form,setForm]=useState({nombre:'',razon_social:'',identificacion_fiscal:'',pais:'',ciudad:'',mercado:'Estados Unidos',direccion:'',puerto_llegada:'',contacto:'',contacto_cargo:'',telefono:'',whatsapp:'',correo:'',correo_facturacion:'',moneda_habitual:'USD',condiciones_pago:'',plazo_pago_dias:'',incoterm:'',direccion_facturacion:'',direccion_entrega:'',naviera:'',logo_url:'',observaciones:'',activo:true})
+function ClientModal({client,close,onSaved}){
+  const initialForm={nombre:'',razon_social:'',identificacion_fiscal:'',pais:'',ciudad:'',mercado:'Estados Unidos',direccion:'',puerto_llegada:'',contacto:'',contacto_cargo:'',telefono:'',whatsapp:'',correo:'',correo_facturacion:'',moneda_habitual:'USD',condiciones_pago:'',plazo_pago_dias:'',incoterm:'',direccion_facturacion:'',direccion_entrega:'',naviera:'',logo_url:'',observaciones:'',activo:true}
+  const [form,setForm]=useState(()=>client?Object.fromEntries(Object.keys(initialForm).map(key=>[key,client[key]??initialForm[key]])):initialForm)
   const [saving,setSaving]=useState(false); const [error,setError]=useState('')
   const change=e=>setForm({...form,[e.target.name]:e.target.type==='checkbox'?e.target.checked:e.target.value})
   const save=async()=>{
@@ -141,12 +143,13 @@ function ClientModal({close,onSaved}){
     setSaving(true);setError('')
     const payload={...form,nombre:form.nombre.trim(),pais:form.pais.trim(),plazo_pago_dias:form.plazo_pago_dias?Number(form.plazo_pago_dias):null}
     Object.keys(payload).forEach(key=>{if(payload[key]==='')payload[key]=null})
-    const {error:saveError}=await supabase.from('clientes').insert(payload)
+    const result=client?await supabase.from('clientes').update(payload).eq('id',client.id).select('id').single():await supabase.from('clientes').insert(payload)
+    const {error:saveError}=result
     setSaving(false)
     if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
     onSaved()
   }
-  return <div className="modalwrap"><div className="modal realform clientform"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>Ficha del cliente</h2></div><button onClick={close}><X/></button></div>
+  return <div className="modalwrap"><div className="modal realform clientform"><div className="modalhead"><div><span>{client?'EDITAR REGISTRO':'NUEVO REGISTRO'}</span><h2>Ficha del cliente</h2></div><button onClick={close}><X/></button></div>
     <div className="formsection"><h3>Identificación y destino</h3><div className="formgrid">
       <label>Nombre comercial *<input name="nombre" value={form.nombre} onChange={change} placeholder="Ejemplo: J&C Tropicals"/></label><label>Razón social<input name="razon_social" value={form.razon_social} onChange={change}/></label>
       <label>Identificación fiscal<input name="identificacion_fiscal" value={form.identificacion_fiscal} onChange={change}/></label><label>Mercado<select name="mercado" value={form.mercado} onChange={change}><option>Estados Unidos</option><option>Europa</option><option>Canadá</option><option>Costa Rica</option><option>Otro</option></select></label>
@@ -166,7 +169,7 @@ function ClientModal({close,onSaved}){
       <label>Naviera o transportista habitual<input name="naviera" value={form.naviera} onChange={change}/></label><label>Enlace del logo<input name="logo_url" type="url" value={form.logo_url} onChange={change} placeholder="https://…"/></label>
       <label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label><label className="checklabel"><input name="activo" type="checkbox" checked={form.activo} onChange={change}/> Cliente activo</label>
     </div></div>
-    {error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar cliente'}</button></div>
+    {error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':client?'Guardar cambios':'Guardar cliente'}</button></div>
   </div></div>
 }
 
