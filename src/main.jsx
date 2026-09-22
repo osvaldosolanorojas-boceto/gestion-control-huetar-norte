@@ -150,22 +150,24 @@ function QuickModal({title,close,onSaved,userId}){
 
 
 function AccessScreen(){
-  const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false)
-  const login=async e=>{e.preventDefault();setLoading(true);setError('');const {error:loginError}=await supabase.auth.signInWithPassword({email,password});setLoading(false);if(loginError)setError('No se pudo ingresar. Revise el correo y la contraseña.')}
-  return <div className="authpage"><div className="authcard"><div className="authmark">HN</div><span>ACCESO PRIVADO</span><h1>Gestión y Control</h1><p>Raíces y Tubérculos Huetar Norte S.A.</p><form onSubmit={login}><label>Correo electrónico<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email"/></label><label>Contraseña<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password"/></label>{error&&<div className="formerror">{error}</div>}<button className="primary" disabled={loading}>{loading?'Ingresando…':'Ingresar'}</button></form><small>Solo pueden ingresar usuarios autorizados.</small></div></div>
+  const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [message,setMessage]=useState(''); const [loading,setLoading]=useState(false)
+  const login=async e=>{e.preventDefault();setLoading(true);setError('');setMessage('');const {error:loginError}=await supabase.auth.signInWithPassword({email,password});setLoading(false);if(loginError)setError('No se pudo ingresar. Revise el correo y la contraseña.')}
+  const recover=async()=>{if(!email.trim()){setError('Escriba primero su correo electrónico.');return}setLoading(true);setError('');setMessage('');const redirectTo=`${window.location.origin}${window.location.pathname}`;const {error:resetError}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo});setLoading(false);if(resetError){setError('No se pudo enviar el enlace. Intente nuevamente.');return}setMessage('Le enviamos un enlace para crear una contraseña nueva. Revise también Correo no deseado.')}
+  return <div className="authpage"><div className="authcard"><div className="authmark">HN</div><span>ACCESO PRIVADO</span><h1>Gestión y Control</h1><p>Raíces y Tubérculos Huetar Norte S.A.</p><form onSubmit={login}><label>Correo electrónico<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email"/></label><label>Contraseña<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="current-password"/></label>{error&&<div className="formerror">{error}</div>}{message&&<div className="notice">{message}</div>}<button className="primary" disabled={loading}>{loading?'Procesando…':'Ingresar'}</button><button type="button" onClick={recover} disabled={loading} style={{marginTop:12,background:'transparent',border:0,color:'#154c8c',fontWeight:800,textDecoration:'underline'}}>Olvidé mi contraseña</button></form><small>Solo pueden ingresar usuarios autorizados.</small></div></div>
 }
 
 function SetPassword({done}){
   const [password,setPassword]=useState(''); const [repeat,setRepeat]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false)
   const save=async e=>{e.preventDefault();if(password.length<8){setError('La contraseña debe tener al menos 8 caracteres.');return}if(password!==repeat){setError('Las contraseñas no coinciden.');return}setLoading(true);const {error:saveError}=await supabase.auth.updateUser({password});setLoading(false);if(saveError){setError(saveError.message);return}done()}
-  return <div className="authpage"><div className="authcard"><div className="authmark">HN</div><span>ACTIVAR CUENTA</span><h1>Cree su contraseña</h1><p>Esta será su clave privada para ingresar a Gestión y Control.</p><form onSubmit={save}><label>Nueva contraseña<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="new-password"/></label><label>Repetir contraseña<input type="password" value={repeat} onChange={e=>setRepeat(e.target.value)} required autoComplete="new-password"/></label>{error&&<div className="formerror">{error}</div>}<button className="primary" disabled={loading}>{loading?'Guardando…':'Activar mi cuenta'}</button></form></div></div>
+  return <div className="authpage"><div className="authcard"><div className="authmark">HN</div><span>NUEVA CONTRASEÑA</span><h1>Cree su contraseña</h1><p>Esta será su clave privada para ingresar a Gestión y Control.</p><form onSubmit={save}><label>Nueva contraseña<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required autoComplete="new-password"/></label><label>Repetir contraseña<input type="password" value={repeat} onChange={e=>setRepeat(e.target.value)} required autoComplete="new-password"/></label>{error&&<div className="formerror">{error}</div>}<button className="primary" disabled={loading}>{loading?'Guardando…':'Guardar nueva contraseña'}</button></form></div></div>
 }
 
 function Root(){
   const [session,setSession]=useState(undefined)
   const [profile,setProfile]=useState(undefined); const [accessError,setAccessError]=useState('')
   const [invited,setInvited]=useState(()=>window.location.hash.includes('type=invite'))
-  useEffect(()=>{if(!supabase){setSession(null);return}supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));return()=>subscription.unsubscribe()},[])
+  const [recovering,setRecovering]=useState(()=>window.location.hash.includes('type=recovery'))
+  useEffect(()=>{if(!supabase){setSession(null);return}supabase.auth.getSession().then(({data})=>setSession(data.session));const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{setSession(next);if(event==='PASSWORD_RECOVERY')setRecovering(true)});return()=>subscription.unsubscribe()},[])
   useEffect(()=>{let active=true;if(!session){setProfile(undefined);return}
     supabase.from('perfiles').select('id,nombre,rol,activo').eq('id',session.user.id).single().then(({data,error})=>{
       if(!active)return
@@ -175,7 +177,7 @@ function Root(){
   },[session])
   if(session===undefined)return <div className="authpage"><div className="authcard"><b>Abriendo Gestión y Control…</b></div></div>
   if(!session)return <AccessScreen/>
-  if(invited)return <SetPassword done={()=>setInvited(false)}/>
+  if(invited||recovering)return <SetPassword done={()=>{setInvited(false);setRecovering(false);window.history.replaceState({},document.title,window.location.pathname)}}/>
   if(profile===undefined)return <div className="authpage"><div className="authcard"><b>Verificando permisos…</b></div></div>
   if(!profile)return <div className="authpage"><div className="authcard"><h1>Acceso no autorizado</h1><p>{accessError}</p><button className="primary" onClick={()=>supabase.auth.signOut()}>Cerrar sesión</button></div></div>
   return <App profile={profile}/>
