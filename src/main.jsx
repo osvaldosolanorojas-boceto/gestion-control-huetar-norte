@@ -26,7 +26,7 @@ function App({profile}){
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
-      <nav>{(profile.rol==='planta'?nav.filter(([label])=>['Boletas de entrada','Producción y rendimientos'].includes(label)):nav).map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <nav>{(profile.rol==='planta'?nav.filter(([label])=>['Boletas de entrada'].includes(label)):nav).map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
       <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button onClick={()=>supabase.auth.signOut()}><LogOut size={19}/>Cerrar sesión</button></div>
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
