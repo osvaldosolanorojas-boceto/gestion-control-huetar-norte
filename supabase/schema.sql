@@ -21,7 +21,14 @@ create table public.proveedores (
 
 create table public.clientes (
   id uuid primary key default gen_random_uuid(), nombre text not null,
-  pais text, mercado text, contacto text, condiciones text,
+  razon_social text, identificacion_fiscal text,
+  pais text, ciudad text, mercado text, direccion text, puerto_llegada text,
+  contacto text, contacto_cargo text, telefono text, whatsapp text,
+  correo text, correo_facturacion text,
+  moneda_habitual public.moneda not null default 'USD',
+  condiciones text, condiciones_pago text, plazo_pago_dias integer check (plazo_pago_dias >= 0),
+  incoterm text, direccion_facturacion text, direccion_entrega text,
+  naviera text, logo_url text, observaciones text,
   activo boolean not null default true, creado_en timestamptz not null default now()
 );
 
@@ -110,4 +117,3 @@ create index on public.boletas_entrada(orden_compra_id);
 create index on public.boletas_entrada(proveedor_id);
 create index on public.ordenes_venta(cliente_id);
 create index on public.ordenes_venta_lineas(orden_venta_id);
-
