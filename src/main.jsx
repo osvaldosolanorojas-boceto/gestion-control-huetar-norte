@@ -4,11 +4,13 @@ import { LayoutDashboard, ShoppingCart, Truck, Factory, WalletCards, Users, User
 import { initialAuthLinkType, isSupabaseReady, supabase } from './supabase'
 import './styles.css'
 import PurchaseOrderModal from './purchase-form'
+import SalesOrderModal from './sales-form'
+import CartonInventory from './carton-inventory'
 
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
-  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Finanzas', WalletCards],
+  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Finanzas', WalletCards],
   ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
 ]
 
@@ -28,10 +30,10 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
-      ? <SalesOrderModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
+      ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
       : section==='Órdenes de compra'
         ? <PurchaseOrderModal order={editingClient} userId={profile.id} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
       : section==='Clientes'
@@ -64,7 +66,7 @@ function Module({title,search,setSearch,onNew,onEdit,refresh}){
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
-    supabase.from(table).select('*').order('creado_en',{ascending:false}).limit(100).then(({data,error:loadError})=>{
+    supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100).then(({data,error:loadError})=>{
       if(!active)return;setLoading(false);if(loadError){setError('No se pudieron cargar los datos.');return}setItems(data||[])
     });return()=>{active=false}
   },[table,refresh])
@@ -75,64 +77,15 @@ function Module({title,search,setSearch,onNew,onEdit,refresh}){
     principal:item.nombre||item.productor_nombre||item.producto||item.mercado||'Registro',
     detalle:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
     estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
-    monto:item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
+    monto:title==='Órdenes de venta'&&item.ordenes_venta_lineas?new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(item.ordenes_venta_lineas.reduce((sum,l)=>sum+Number(l.total||0),0)):item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
   })).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[items,search,title])
-  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={['Clientes','Órdenes de compra'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra'].includes(title)}>{['Clientes','Órdenes de compra'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
+  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={['Clientes','Órdenes de compra','Órdenes de venta'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra','Órdenes de venta'].includes(title)}>{['Clientes','Órdenes de compra','Órdenes de venta'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
 }
 
 
 const tableBySection = {
   'Órdenes de compra':'ordenes_compra', 'Boletas de entrada':'boletas_entrada',
   'Órdenes de venta':'ordenes_venta', Proveedores:'proveedores', Clientes:'clientes'
-}
-
-const emptySaleLine = () => ({producto:'Yuca',presentacion_kg:'18',paletas:'1',cajas_por_paleta:'60',precio_caja:''})
-const usd = new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD',minimumFractionDigits:2})
-
-function SalesOrderModal({close,onSaved}){
-  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),cliente_id:'',mercado:'Estados Unidos',contenedor:'',observaciones:''})
-  const [clientes,setClientes]=useState([]); const [loadingClientes,setLoadingClientes]=useState(true)
-  const [lines,setLines]=useState([emptySaleLine()]); const [saving,setSaving]=useState(false); const [error,setError]=useState('')
-  useEffect(()=>{let active=true;supabase.from('clientes').select('id,nombre').eq('activo',true).order('nombre').then(({data,error:loadError})=>{
-    if(!active)return;setLoadingClientes(false);if(loadError){setError('No se pudieron cargar los clientes.');return}setClientes(data||[])
-  });return()=>{active=false}},[])
-  const change=e=>setForm({...form,[e.target.name]:e.target.value})
-  const changeLine=(index,field,value)=>setLines(current=>current.map((line,i)=>i===index?{...line,[field]:value}:line))
-  const lineBoxes=line=>(Number(line.paletas)||0)*(Number(line.cajas_por_paleta)||0)
-  const lineTotal=line=>lineBoxes(line)*(Number(String(line.precio_caja).replace(',','.'))||0)
-  const totalBoxes=lines.reduce((sum,line)=>sum+lineBoxes(line),0)
-  const total=lines.reduce((sum,line)=>sum+lineTotal(line),0)
-  const save=async()=>{
-    if(!form.cliente_id){setError('Seleccione el cliente de esta orden de venta.');return}
-    if(lines.some(line=>!Number.isInteger(Number(line.cajas_por_paleta))||Number(line.cajas_por_paleta)<=0)){
-      setError('Escriba una cantidad válida de cajas por paleta.');return
-    }
-    if(lines.some(line=>Number(String(line.precio_caja).replace(',','.'))<=0)){
-      setError('Escriba el precio por caja en cada producto.');return
-    }
-    setSaving(true);setError('')
-    const codigo=`OV-${Date.now()}`
-    const {data:order,error:orderError}=await supabase.from('ordenes_venta').insert({codigo,fecha:form.fecha,cliente_id:form.cliente_id,mercado:form.mercado,contenedor:form.contenedor||null,moneda:'USD',observaciones:form.observaciones||null}).select('id').single()
-    if(orderError){setSaving(false);setError(`No se pudo guardar: ${orderError.message}`);return}
-    const payload=lines.map(line=>({orden_venta_id:order.id,producto:line.producto,presentacion_kg:Number(line.presentacion_kg),paletas:Number(line.paletas),cajas_por_paleta:Number(line.cajas_por_paleta),cantidad_cajas:lineBoxes(line),precio_caja:Number(String(line.precio_caja).replace(',','.'))}))
-    const {error:linesError}=await supabase.from('ordenes_venta_lineas').insert(payload)
-    if(linesError){await supabase.from('ordenes_venta').delete().eq('id',order.id);setSaving(false);setError(`No se pudieron guardar los productos: ${linesError.message}`);return}
-    setSaving(false);onSaved()
-  }
-  return <div className="modalwrap"><div className="modal realform salesform"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>Orden de venta</h2></div><button onClick={close}><X/></button></div>
-    <div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Cliente<select name="cliente_id" value={form.cliente_id} onChange={change} disabled={loadingClientes}><option value="">{loadingClientes?'Cargando clientes…':'Seleccione un cliente'}</option>{clientes.map(cliente=><option key={cliente.id} value={cliente.id}>{cliente.nombre}</option>)}</select></label><label>Mercado<select name="mercado" value={form.mercado} onChange={change}><option>Estados Unidos</option><option>Europa</option><option>Canadá</option><option>Costa Rica</option></select></label><label>Contenedor<input name="contenedor" value={form.contenedor} onChange={change} placeholder="Número o referencia"/></label></div>
-    <div className="sale-lines">{lines.map((line,index)=><section className="sale-line" key={index}><div className="linehead"><b>Producto {index+1}</b>{lines.length>1&&<button className="remove" type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))}>Quitar producto</button>}</div><div className="formgrid">
-      <label>Producto<select value={line.producto} onChange={e=>changeLine(index,'producto',e.target.value)}><option>Yuca</option><option>Ñampí</option><option>Cabeza de ñampí</option><option>Malanga lila</option><option>Malanga blanca</option><option>Camote</option></select></label>
-      <label>Kilos por caja<input type="number" min="0.01" step="0.01" inputMode="decimal" value={line.presentacion_kg} onChange={e=>changeLine(index,'presentacion_kg',e.target.value)}/></label>
-      <label>Cantidad de paletas<select value={line.paletas} onChange={e=>changeLine(index,'paletas',e.target.value)}>{Array.from({length:22},(_,i)=><option key={i+1} value={i+1}>{i+1} {i===0?'paleta':'paletas'}</option>)}</select></label>
-      <label>Cajas por paleta<input type="number" min="1" step="1" inputMode="numeric" value={line.cajas_por_paleta} onChange={e=>changeLine(index,'cajas_por_paleta',e.target.value)} placeholder="Escriba la cantidad"/></label>
-      <label className="wide">Precio por caja (USD)<input type="number" min="0.01" step="0.01" inputMode="decimal" value={line.precio_caja} onChange={e=>changeLine(index,'precio_caja',e.target.value)} placeholder="Ejemplo: 4,50"/></label>
-    </div><div className="line-total"><span><small>TOTAL CALCULADO</small><b>{lineBoxes(line).toLocaleString('es-CR')} cajas · {line.paletas} paletas</b></span><strong>Subtotal: {usd.format(lineTotal(line))}</strong></div></section>)}</div>
-    <button className="addline" type="button" onClick={()=>setLines(current=>[...current,emptySaleLine()])}><Plus size={18}/>Agregar producto</button>
-    <label className="notes">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label>
-    <div className="order-total"><span>{totalBoxes.toLocaleString('es-CR')} cajas</span><b>Total de la orden: {usd.format(total)}</b></div>
-    {error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar orden'}</button></div>
-  </div></div>
 }
 
 function ClientModal({client,close,onSaved}){
