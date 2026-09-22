@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { LayoutDashboard, ShoppingCart, Truck, Factory, WalletCards, Users, UserRound, Landmark, Menu, X, Plus, Search, ChevronRight, ArrowUpRight, ArrowDownRight, CircleDollarSign, PackageCheck, Settings, LogOut } from 'lucide-react'
 import { initialAuthLinkType, isSupabaseReady, supabase } from './supabase'
 import './styles.css'
+import PurchaseOrderModal from './purchase-form'
 
 
 const nav = [
@@ -31,6 +32,8 @@ function App({profile}){
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
+      : section==='Órdenes de compra'
+        ? <PurchaseOrderModal userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>
       : section==='Clientes'
         ? <ClientModal client={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
         : <QuickModal title={section} userId={profile.id} close={()=>setModal(false)} onSaved={()=>{setModal(false);setRefresh(x=>x+1)}}/>)}
@@ -174,12 +177,13 @@ function ClientModal({client,close,onSaved}){
 }
 
 function QuickModal({title,close,onSaved,userId}){
-  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),proveedor_id:'',nombre:'',moneda:'CRC',monto:'',observaciones:''})
-  const [proveedores,setProveedores]=useState([]); const [loadingProveedores,setLoadingProveedores]=useState(title==='Órdenes de compra')
+  const [form,setForm]=useState({fecha:new Date().toISOString().slice(0,10),proveedor_id:'',orden_compra_id:'',nombre:'',moneda:'CRC',monto:'',observaciones:''})
+  const [proveedores,setProveedores]=useState([]); const [ordenes,setOrdenes]=useState([]); const [loadingProveedores,setLoadingProveedores]=useState(title==='Órdenes de compra')
   const [saving,setSaving]=useState(false); const [error,setError]=useState('')
   useEffect(()=>{if(title!=='Órdenes de compra')return;let active=true;supabase.from('proveedores').select('id,nombre').eq('activo',true).order('nombre').then(({data,error:loadError})=>{
     if(!active)return;setLoadingProveedores(false);if(loadError){setError('No se pudieron cargar los proveedores.');return}setProveedores(data||[])
   });return()=>{active=false}},[title])
+  useEffect(()=>{if(title!=='Boletas de entrada')return;let active=true;supabase.from('ordenes_compra').select('id,codigo,producto,productor_nombre').order('fecha',{ascending:false}).limit(100).then(({data})=>{if(active)setOrdenes(data||[])});return()=>{active=false}},[title])
   const change=e=>setForm({...form,[e.target.name]:e.target.value})
   const save=async()=>{
     if(title==='Órdenes de compra'&&!form.proveedor_id){setError('Seleccione el proveedor de esta orden de compra.');return}
@@ -191,7 +195,7 @@ function QuickModal({title,close,onSaved,userId}){
     let payload
     if(title==='Proveedores') payload={nombre:form.nombre.trim(),tipo:'Agricultor'}
     else if(title==='Órdenes de compra') payload={codigo,fecha:form.fecha,proveedor_id:form.proveedor_id,producto:form.nombre.trim(),moneda:form.moneda,observaciones:form.observaciones||null,creado_por:userId}
-    else if(title==='Boletas de entrada') payload={codigo,fecha_hora:`${form.fecha}T12:00:00`,producto:form.nombre.trim(),observaciones:form.observaciones||null}
+    else if(title==='Boletas de entrada') payload={codigo,fecha_hora:`${form.fecha}T12:00:00`,orden_compra_id:form.orden_compra_id||null,producto:form.nombre.trim(),observaciones:form.observaciones||null}
     else payload={codigo,fecha:form.fecha,moneda:form.moneda,observaciones:form.observaciones||null}
     setSaving(true);setError('')
     const {error:saveError}=await supabase.from(table).insert(payload)
@@ -199,7 +203,7 @@ function QuickModal({title,close,onSaved,userId}){
     if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
     onSaved()
   }
-  return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label>{title==='Órdenes de compra'&&<label className="wide">Proveedor<select name="proveedor_id" value={form.proveedor_id} onChange={change} disabled={loadingProveedores}><option value="">{loadingProveedores?'Cargando proveedores…':'Seleccione un proveedor'}</option>{proveedores.map(proveedor=><option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>)}</select></label>}<label className="wide">{title==='Órdenes de compra'?'Producto':'Nombre o descripción'}<input name="nombre" value={form.nombre} onChange={change} placeholder={title==='Órdenes de compra'?'Escriba el producto…':'Escriba aquí…'}/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
+  return <div className="modalwrap"><div className="modal"><div className="modalhead"><div><span>NUEVO REGISTRO</span><h2>{title}</h2></div><button onClick={close}><X/></button></div><div className="formgrid"><label>Fecha<input name="fecha" type="date" value={form.fecha} onChange={change}/></label><label>Código<input placeholder="Se genera automáticamente" disabled/></label>{title==='Boletas de entrada'&&<label className="wide">Orden de compra relacionada<select name="orden_compra_id" value={form.orden_compra_id} onChange={change}><option value="">Enlazar después</option>{ordenes.map(o=><option key={o.id} value={o.id}>{o.codigo} · {o.productor_nombre||'Productor'} · {o.producto}</option>)}</select></label>}{title==='Órdenes de compra'&&<label className="wide">Proveedor<select name="proveedor_id" value={form.proveedor_id} onChange={change} disabled={loadingProveedores}><option value="">{loadingProveedores?'Cargando proveedores…':'Seleccione un proveedor'}</option>{proveedores.map(proveedor=><option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>)}</select></label>}<label className="wide">{title==='Órdenes de compra'?'Producto':'Nombre o descripción'}<input name="nombre" value={form.nombre} onChange={change} placeholder={title==='Órdenes de compra'?'Escriba el producto…':'Escriba aquí…'}/></label><label>Moneda<select name="moneda" value={form.moneda} onChange={change}><option value="CRC">Colones (CRC)</option><option value="USD">Dólares (USD)</option><option value="EUR">Euros (EUR)</option></select></label><label>Monto<input name="monto" value={form.monto} onChange={change} type="number" step="0.01" placeholder="0,00"/></label><label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar registro'}</button></div></div></div>}
 
 
 function AccessScreen(){
