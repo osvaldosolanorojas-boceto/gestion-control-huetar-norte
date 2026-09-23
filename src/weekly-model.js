@@ -7,6 +7,11 @@ export function mondayOf(value){
   date.setUTCDate(date.getUTCDate()-(date.getUTCDay()+6)%7)
   return date.toISOString().slice(0,10)
 }
+export function sundayOf(value){
+  const date=new Date(`${value}T12:00:00Z`)
+  date.setUTCDate(date.getUTCDate()-date.getUTCDay())
+  return date.toISOString().slice(0,10)
+}
 export function addDays(value,days){
   const date=new Date(`${value}T12:00:00Z`)
   date.setUTCDate(date.getUTCDate()+days)
