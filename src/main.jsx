@@ -8,13 +8,14 @@ import SalesOrderModal from './sales-form'
 import CartonInventory from './carton-inventory'
 import SupplyInventory from './supply-inventory'
 import PlasticCrates from './plastic-crates'
+import SecondInventory from './second-inventory'
 import PlantReceipt from './plant-receipt'
 import Workers from './workers'
 
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
-  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
+  ['Producción y rendimientos', Factory], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
   ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
 ]
 const visibleSections={planta:['Boletas de entrada'],bodega:['Inventario de cartones','Inventario de insumos','Cajas plásticas'],finca:[],chofer:[]}
@@ -36,7 +37,7 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
