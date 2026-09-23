@@ -71,22 +71,28 @@ function Stat({title,value,note,icon:Icon,up,warning}){return <article className
 
 function Module({title,search,setSearch,onNew,onEdit,refresh}){
   const [items,setItems]=useState([]); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
+  const [receiptOrders,setReceiptOrders]=useState({})
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
-    supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100).then(({data,error:loadError})=>{
-      if(!active)return;setLoading(false);if(loadError){setError('No se pudieron cargar los datos.');return}setItems(data||[])
-    });return()=>{active=false}
+    const load=async()=>{
+      const [result,orders]=await Promise.all([supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100),title==='Boletas de entrada'?supabase.rpc('ordenes_compra_para_planta'):Promise.resolve({data:[],error:null})])
+      if(!active)return;setLoading(false)
+      if(result.error||orders.error){setError('No se pudieron cargar los datos.');return}
+      setItems(result.data||[])
+      setReceiptOrders(Object.fromEntries((orders.data||[]).map(order=>[order.id,order])))
+    }
+    load();return()=>{active=false}
   },[table,refresh])
   const rows=useMemo(()=>items.map((item,index)=>({
     key:item.id||index,
     item,
     codigo:item.codigo||`${title==='Proveedores'?'PR':'CL'}-${String(index+1).padStart(3,'0')}`,
-    principal:item.nombre||item.productor_nombre||item.producto||item.mercado||'Registro',
-    detalle:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
+    principal:title==='Boletas de entrada'?(receiptOrders[item.orden_compra_id]?.productor_nombre||'Productor pendiente'):item.nombre||item.productor_nombre||item.producto||item.mercado||'Registro',
+    detalle:title==='Boletas de entrada'?`${item.producto||receiptOrders[item.orden_compra_id]?.producto||'Producto'} · ${receiptOrders[item.orden_compra_id]?.codigo||'Sin orden de compra'}`:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
     estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
     monto:title==='Órdenes de venta'&&item.ordenes_venta_lineas?new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(item.ordenes_venta_lineas.reduce((sum,l)=>sum+Number(l.total||0),0)):item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
-  })).filter(r=>Object.values(r).join(' ').toLowerCase().includes(search.toLowerCase())),[items,search,title])
+  })).filter(r=>`${r.codigo} ${r.principal} ${r.detalle} ${r.estado}`.toLowerCase().includes(search.toLowerCase())),[items,search,title,receiptOrders])
   return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error}</div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)}>{['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
 }
 
