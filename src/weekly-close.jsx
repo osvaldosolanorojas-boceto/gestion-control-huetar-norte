@@ -49,7 +49,7 @@ export default function WeeklyClose(){
     if(!form.fecha||form.fecha<monday||form.fecha>sunday){setError('Seleccione una fecha dentro de la semana mostrada.');return}
     if(!form.concepto.trim()||!Number.isFinite(amount)||amount<=0||Math.round(amount*100)!==amount*100){setError('Complete concepto y monto positivo con hasta dos decimales.');return}
     if(form.categoria==='planilla'&&!form.trabajador_id){setError('Seleccione el trabajador de la planilla.');return}
-    if((form.cantidad!==''||form.tarifa!==''||form.unidad!=='')&&(!form.unidad.trim()||!Number.isFinite(Number(form.cantidad))||Number(form.cantidad)<=0||!Number.isFinite(Number(form.tarifa))||Number(form.tarifa)<0)){setError('Para calcular por unidad complete unidad, cantidad y tarifa.');return}
+    if((form.cantidad!==''||form.tarifa!==''||form.unidad!=='')&&(!form.unidad.trim()||form.cantidad===''||form.tarifa===''||!Number.isFinite(Number(form.cantidad))||Number(form.cantidad)<=0||!Number.isFinite(Number(form.tarifa))||Number(form.tarifa)<0)){setError('Para calcular por unidad complete unidad, cantidad y tarifa.');return}
     const payload={fecha:form.fecha,categoria:form.categoria,concepto:form.concepto.trim(),moneda:form.moneda,monto:amount,trabajador_id:form.categoria==='planilla'?form.trabajador_id:null,orden_venta_id:form.orden_venta_id||null,unidad:form.unidad.trim()||null,cantidad:value(form.cantidad),tarifa:value(form.tarifa),referencia:form.referencia.trim()||null,observaciones:form.observaciones.trim()||null}
     setSaving(true);setError('')
     const result=editing==='new'?await supabase.from('costos_operativos').insert(payload):await supabase.from('costos_operativos').update(payload).eq('id',editing).select('id').single()
