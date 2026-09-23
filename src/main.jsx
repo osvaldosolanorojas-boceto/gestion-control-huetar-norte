@@ -111,12 +111,13 @@ function Module({title,role,search,setSearch,onNew,onEdit,refresh}){
   const [closedPurchases,setClosedPurchases]=useState({})
   const [retry,setRetry]=useState(0)
   const [history,setHistory]=useState(false);const [closing,setClosing]=useState(null)
-  const [week,setWeek]=useState(()=>weekOf(new Date()))
+  const [week,setWeek]=useState(()=>title==='Órdenes de compra'?'all':weekOf(new Date()))
+  useEffect(()=>{setWeek(title==='Órdenes de compra'?'all':weekOf(new Date()))},[title])
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
     const load=async()=>{
-      const [result,orders,purchaseReceipts,clientsResult,purchaseTypes]=await Promise.all([supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100),title==='Boletas de entrada'?supabase.rpc('ordenes_compra_para_planta'):Promise.resolve({data:[],error:null}),title==='Órdenes de compra'?supabase.from('boletas_entrada').select('orden_compra_id,finalizada_en').limit(1000):Promise.resolve({data:[],error:null}),title==='Órdenes de venta'?supabase.from('clientes').select('id,nombre'):Promise.resolve({data:[],error:null}),title==='Boletas de entrada'&&['administrador','oficina'].includes(role)?supabase.from('ordenes_compra').select('id,tipo_compra,producto').limit(200):Promise.resolve({data:[],error:null})])
+      const [result,orders,purchaseReceipts,clientsResult,purchaseTypes]=await Promise.all([supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(title==='Órdenes de compra'?1000:100),title==='Boletas de entrada'?supabase.rpc('ordenes_compra_para_planta'):Promise.resolve({data:[],error:null}),title==='Órdenes de compra'?supabase.from('boletas_entrada').select('orden_compra_id,finalizada_en').limit(1000):Promise.resolve({data:[],error:null}),title==='Órdenes de venta'?supabase.from('clientes').select('id,nombre'):Promise.resolve({data:[],error:null}),title==='Boletas de entrada'&&['administrador','oficina'].includes(role)?supabase.from('ordenes_compra').select('id,tipo_compra,producto').limit(200):Promise.resolve({data:[],error:null})])
       if(!active)return;setLoading(false)
       if(result.error){setError(`No se pudieron cargar los datos: ${result.error.message}`);return}
       setItems(result.data||[])
