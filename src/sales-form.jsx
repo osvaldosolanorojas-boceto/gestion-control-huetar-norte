@@ -3,6 +3,7 @@ import {Plus,X} from 'lucide-react'
 import {createPortal} from 'react-dom'
 import ClientModal from './client-modal'
 import {supabase} from './supabase'
+import {addDays,costaRicaToday,isoWeek,mondayOf} from './weekly-model'
 
 const productOptions=['Yuca','Ñampí','Cabeza de ñampí','Camote','Caña de azúcar','Jengibre','Cúrcuma','Malanga lila','Malanga blanca','Malanga taro','Papa china','Ñame','Chayote','Ayote']
 const countries=['Estados Unidos','Canadá','Costa Rica','España','Francia','Países Bajos','Alemania','Italia','Reino Unido','Portugal','Bélgica','Panamá','Otro']
@@ -11,8 +12,9 @@ const numeric=v=>Number(String(v).replace(',','.'))
 const boxes=line=>numeric(line.paletas)*numeric(line.cajas_por_paleta)
 const lineAmount=(line,moneda)=>moneda==='CRC'?boxes(line)*numeric(line.presentacion_kg)/46*numeric(line.precio_quintal):boxes(line)*numeric(line.precio_caja)
 
-export default function SalesOrderModal({order,close,onSaved}){
-  const [form,setForm]=useState(()=>({fecha:order?.fecha||new Date().toLocaleDateString('en-CA'),fecha_salida:order?.fecha_salida||'',cliente_id:order?.cliente_id||'',moneda:order?.moneda||'USD',numero_cliente:order?.numero_cliente?String(order.numero_cliente):'',mercado:order?.mercado||'Estados Unidos',pais_destino:order?.pais_destino||'Estados Unidos',contenedor:order?.contenedor||'',observaciones:order?.observaciones||''}))
+export default function SalesOrderModal({order,selectedWeek,close,onSaved}){
+  const weekStart=selectedWeek&&selectedWeek!=='all'?addDays(mondayOf(`${selectedWeek.slice(0,4)}-01-04`),(Number(selectedWeek.slice(-2))-1)*7):''
+  const [form,setForm]=useState(()=>({fecha:order?.fecha||costaRicaToday(),fecha_salida:order?.fecha_salida||(weekStart||''),cliente_id:order?.cliente_id||'',moneda:order?.moneda||'USD',numero_cliente:order?.numero_cliente?String(order.numero_cliente):'',mercado:order?.mercado||'Estados Unidos',pais_destino:order?.pais_destino||'Estados Unidos',contenedor:order?.contenedor||'',observaciones:order?.observaciones||''}))
   const [lines,setLines]=useState(order?[]:[emptyLine()]);const [clients,setClients]=useState([]);const [cartons,setCartons]=useState([]);const [reserved,setReserved]=useState({});const [loaded,setLoaded]=useState(!order)
   const [newCarton,setNewCarton]=useState(null);const [newCartonLine,setNewCartonLine]=useState(null)
   const [trace,setTrace]=useState([])
