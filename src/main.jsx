@@ -6,33 +6,37 @@ import './styles.css'
 import PurchaseOrderModal from './purchase-form'
 import SalesOrderModal from './sales-form'
 import CartonInventory from './carton-inventory'
+import SupplyInventory from './supply-inventory'
+import PlasticCrates from './plastic-crates'
 import PlantReceipt from './plant-receipt'
 import Workers from './workers'
 
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
-  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Finanzas', WalletCards],
+  ['Producción y rendimientos', Factory], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
   ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
 ]
+const visibleSections={planta:['Boletas de entrada'],bodega:['Inventario de cartones','Inventario de insumos','Cajas plásticas'],finca:[],chofer:[]}
 
 
 const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
 
 
 function App({profile}){
-  const [section,setSection]=useState(profile.rol==='planta'?'Boletas de entrada':'Resumen'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [refresh,setRefresh]=useState(0)
+  const allowed=visibleSections[profile.rol]||nav.map(([label])=>label)
+  const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [refresh,setRefresh]=useState(0)
   const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
-      <nav>{(profile.rol==='planta'?nav.filter(([label])=>['Boletas de entrada'].includes(label)):nav).map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <nav>{nav.filter(([label])=>allowed.includes(label)).map(([label,Icon])=><button key={label} className={section===label?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
       <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button onClick={()=>supabase.auth.signOut()}><LogOut size={19}/>Cerrar sesión</button></div>
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
