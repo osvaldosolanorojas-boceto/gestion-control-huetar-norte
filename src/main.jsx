@@ -38,6 +38,25 @@ function weekOf(value){
 function App({profile}){
   const allowed=visibleSections[profile.rol]||nav.map(([label])=>label)
   const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [refresh,setRefresh]=useState(0)
+  useEffect(()=>{
+    let checking=false
+    const checkVersion=async()=>{
+      if(document.visibilityState!=='visible'||document.querySelector('.modalwrap')||checking)return
+      checking=true
+      try{
+        const response=await fetch(`${window.location.pathname}?version_check=${Date.now()}`,{cache:'no-store'})
+        if(!response.ok)return
+        const latest=new DOMParser().parseFromString(await response.text(),'text/html').querySelector('script[type="module"][src]')?.getAttribute('src')
+        const current=document.querySelector('script[type="module"][src]')?.getAttribute('src')
+        if(latest&&current&&latest!==current)window.location.replace(`${window.location.pathname}?v=${Date.now()}`)
+      }catch{ /* La conexión puede estar temporalmente desconectada. */ }
+      finally{checking=false}
+    }
+    checkVersion()
+    document.addEventListener('visibilitychange',checkVersion)
+    const interval=window.setInterval(checkVersion,60000)
+    return()=>{document.removeEventListener('visibilitychange',checkVersion);window.clearInterval(interval)}
+  },[])
   const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
