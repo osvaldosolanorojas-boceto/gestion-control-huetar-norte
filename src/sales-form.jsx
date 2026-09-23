@@ -26,7 +26,25 @@ export default function SalesOrderModal({order,close,onSaved}){
     if(!newCarton.marca.trim()||!newCarton.descripcion.trim()||!Number.isInteger(stock)||stock<0||!Number.isInteger(min)||min<0){setError('Complete marca, descripción y existencias válidas.');return}
     setSaving(true);setError('')
     const {data,error:cartonError}=await supabase.from('inventario_cartones').insert({marca:newCarton.marca.trim(),descripcion:newCarton.descripcion.trim(),existencia:stock,minimo_alerta:min}).select('id,marca,descripcion,existencia,minimo_alerta,presentacion_kg').single()
-    setSaving(false);if(cartonError){setError(`No se pudo guardar la marca: ${cartonError.message}`);return}
+    if(cartonError){
+      // A failed response may arrive after the server has inserted the row.
+      // Look up the exact values before asking the user to try again.
+      if(/fetch|load failed|network/i.test(cartonError.message)){
+        const {data:existing,error:lookupError}=await supabase.from('inventario_cartones')
+          .select('id,marca,descripcion,existencia,minimo_alerta,presentacion_kg')
+          .eq('marca',newCarton.marca.trim()).eq('descripcion',newCarton.descripcion.trim())
+          .eq('existencia',stock).eq('minimo_alerta',min).order('creado_en',{ascending:false}).limit(1)
+        if(!lookupError&&existing?.length){
+          const saved=existing[0]
+          setCartons(current=>current.some(c=>c.id===saved.id)?current:[...current,saved].sort((a,b)=>a.marca.localeCompare(b.marca,'es')))
+          setLines(current=>current.map((line,i)=>i===newCartonLine?{...line,carton_id:saved.id,carton_marca:saved.marca}:line))
+          setNewCarton(null);setNewCartonLine(null);setSaving(false);return
+        }
+        setError('No se pudo confirmar si la marca se guardó. Revise «Inventario de cartones» antes de volver a intentarlo.')
+      }else setError(`No se pudo guardar la marca: ${cartonError.message}`)
+      setSaving(false);return
+    }
+    setSaving(false);
     setCartons(current=>[...current,data].sort((a,b)=>a.marca.localeCompare(b.marca,'es')));setLines(current=>current.map((line,i)=>i===newCartonLine?{...line,carton_id:data.id,carton_marca:data.marca}:line));setNewCarton(null);setNewCartonLine(null)
   }
   const totalBoxes=lines.reduce((sum,line)=>sum+boxes(line),0)
