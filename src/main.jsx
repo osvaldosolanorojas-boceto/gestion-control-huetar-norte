@@ -15,6 +15,7 @@ import LoadMap from './load-map'
 import PlantReceipt from './plant-receipt'
 import Workers from './workers'
 import WeeklyClose from './weekly-close'
+import {addDays,costaRicaToday,isoWeek,sundayOf} from './weekly-model'
 import Farms from './farms'
 
 
@@ -29,12 +30,12 @@ const visibleSections={planta:['Boletas de entrada','Mapa de carga'],bodega:['In
 const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
 function weekOf(value){
   if(!value)return ''
-  const date=new Date(value),day=(date.getUTCDay()+6)%7
-  if(Number.isNaN(date.getTime()))return ''
-  date.setUTCDate(date.getUTCDate()-day+3)
-  const start=new Date(Date.UTC(date.getUTCFullYear(),0,4))
-  start.setUTCDate(start.getUTCDate()-(start.getUTCDay()+6)%7+3)
-  return `${date.getUTCFullYear()}-${String(1+Math.round((date-start)/604800000)).padStart(2,'0')}`
+  const parsed=new Date(value)
+  if(Number.isNaN(parsed.getTime()))return ''
+  const day=/^\d{4}-\d{2}-\d{2}$/.test(value)?value:costaRicaToday(parsed)
+  const monday=new Date(`${day}T12:00:00Z`).getUTCDay()===0?addDays(day,1):day
+  const {year,week}=isoWeek(monday)
+  return `${year}-${String(week).padStart(2,'0')}`
 }
 
 
@@ -90,9 +91,9 @@ function Dashboard({go,profile,refresh}){
   useEffect(()=>{let active=true;supabase.from('boletas_entrada').select('kg_estimados').then(({data:receipts})=>{if(active)setPlant({count:receipts?.length||0,kg:(receipts||[]).reduce((sum,r)=>sum+Number(r.kg_estimados||0),0)})});return()=>{active=false}},[refresh])
   const receivable=currency=>data.receivables.filter(r=>r.moneda===currency).reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
   const payable=data.payables.filter(r=>r.etapa!=='Faltan precios').reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
-  const date=new Date(),start=new Date(date);start.setDate(date.getDate()-((date.getDay()+6)%7));const pad=n=>String(n).padStart(2,'0');const monday=`${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`
-  const weeklySales=data.receivables.filter(r=>r.fecha>=monday&&r.moneda==='USD').reduce((sum,r)=>sum+Number(r.monto),0)
-  const weeklyLocal=data.receivables.filter(r=>r.fecha>=monday&&r.moneda==='CRC').reduce((sum,r)=>sum+Number(r.monto),0)
+  const weekStart=sundayOf(costaRicaToday())
+  const weeklySales=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='USD').reduce((sum,r)=>sum+Number(r.monto),0)
+  const weeklyLocal=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='CRC').reduce((sum,r)=>sum+Number(r.monto),0)
   return <>{!isSupabaseReady&&<div className="notice">Falta conectar Supabase.</div>}
   <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>Resumen calculado a partir de los registros guardados.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
   {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><div className="stats"><Stat title="Pedidos USD esta semana" value={cash(weeklySales,'USD')} note="Valor previsto de órdenes" icon={CircleDollarSign}/><Stat title="Ventas locales esta semana" value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/><Stat title="Por cobrar USD" value={cash(receivable('USD'),'USD')} note={`${data.receivables.length} ventas y pedidos`} icon={ArrowUpRight}/><Stat title="Por pagar estimado" value={cash(payable)} note="Compras con rendimiento y precio" icon={ArrowDownRight}/></div>
