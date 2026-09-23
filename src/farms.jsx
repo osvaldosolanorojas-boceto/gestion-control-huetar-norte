@@ -11,7 +11,7 @@ export default function Farms(){
   const [yearFilter,setYearFilter]=useState(year),[farmName,setFarmName]=useState(''),[lotForm,setLotForm]=useState({finca_id:'',anio:year,nombre:'',producto:''}),[costForm,setCostForm]=useState(blankCost)
   const [error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false)
   const reload=async()=>{
-    const [a,b,c,d,e]=await Promise.all([supabase.from('fincas').select('*').order('nombre'),supabase.from('lotes_finca').select('*').order('anio',{ascending:false}).order('nombre'),supabase.from('ordenes_compra').select('id,codigo,fecha,producto,finca_lote_id,proveedor_id,productor_nombre').not('finca_lote_id','is',null).order('fecha'),supabase.from('cxp_operativa').select('origen_id,monto,aplicado'),supabase.from('costos_finca').select('*').order('fecha')])
+    const [a,b,c,d,e]=await Promise.all([supabase.from('fincas').select('*').order('nombre'),supabase.from('lotes_finca').select('*').order('anio',{ascending:false}).order('nombre'),supabase.from('ordenes_compra').select('id,codigo,fecha,producto,finca_lote_id,proveedor_id,productor_nombre').not('finca_lote_id','is',null).neq('estado','Anulada').order('fecha'),supabase.from('cxp_operativa').select('origen_id,monto,aplicado'),supabase.from('costos_finca').select('*').order('fecha')])
     setLoading(false)
     if(a.error||b.error||c.error||d.error||e.error){setError(`No se pudo cargar el control de fincas: ${(a.error||b.error||c.error||d.error||e.error).message}`);return}
     setError('');setFarms(a.data||[]);setLots(b.data||[]);setOrders(c.data||[]);setPayables(d.data||[]);setCosts(e.data||[])
