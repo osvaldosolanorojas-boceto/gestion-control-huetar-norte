@@ -24,6 +24,15 @@ const visibleSections={planta:['Boletas de entrada','Mapa de carga'],bodega:['In
 
 
 const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
+function weekOf(value){
+  if(!value)return ''
+  const date=new Date(value),day=(date.getUTCDay()+6)%7
+  if(Number.isNaN(date.getTime()))return ''
+  date.setUTCDate(date.getUTCDate()-day+3)
+  const start=new Date(Date.UTC(date.getUTCFullYear(),0,4))
+  start.setUTCDate(start.getUTCDate()-(start.getUTCDay()+6)%7+3)
+  return `${date.getUTCFullYear()}-${String(1+Math.round((date-start)/604800000)).padStart(2,'0')}`
+}
 
 
 function App({profile}){
@@ -39,7 +48,7 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:['Finanzas','Bancos','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:['Finanzas','Bancos','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} role={profile.rol} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
@@ -73,32 +82,68 @@ function Dashboard({go,profile,refresh}){
 function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
 
 
-function Module({title,search,setSearch,onNew,onEdit,refresh}){
+function Module({title,role,search,setSearch,onNew,onEdit,refresh}){
   const [items,setItems]=useState([]); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
   const [receiptOrders,setReceiptOrders]=useState({})
+  const [closedPurchases,setClosedPurchases]=useState({})
   const [retry,setRetry]=useState(0)
+  const [history,setHistory]=useState(false);const [closing,setClosing]=useState(null)
+  const [week,setWeek]=useState(()=>weekOf(new Date()))
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
     const load=async()=>{
-      const [result,orders]=await Promise.all([supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100),title==='Boletas de entrada'?supabase.rpc('ordenes_compra_para_planta'):Promise.resolve({data:[],error:null})])
+      const [result,orders,purchaseReceipts]=await Promise.all([supabase.from(table).select(title==='Órdenes de venta'?'*,ordenes_venta_lineas(total)':'*').order('creado_en',{ascending:false}).limit(100),title==='Boletas de entrada'?supabase.rpc('ordenes_compra_para_planta'):Promise.resolve({data:[],error:null}),title==='Órdenes de compra'?supabase.from('boletas_entrada').select('orden_compra_id,finalizada_en').limit(1000):Promise.resolve({data:[],error:null})])
       if(!active)return;setLoading(false)
       if(result.error){setError(`No se pudieron cargar los datos: ${result.error.message}`);return}
       setItems(result.data||[])
       setReceiptOrders(Object.fromEntries((orders.data||[]).map(order=>[order.id,order])))
+      if(title==='Órdenes de compra'&&!purchaseReceipts.error){const grouped={};for(const b of purchaseReceipts.data||[]){const state=grouped[b.orden_compra_id]||{count:0,closed:0};state.count++;if(b.finalizada_en)state.closed++;grouped[b.orden_compra_id]=state}setClosedPurchases(Object.fromEntries(Object.entries(grouped).map(([id,x])=>[id,x.count>0&&x.count===x.closed])))}
     }
     load();return()=>{active=false}
   },[table,refresh,retry])
+  const finish=async item=>{
+    setClosing(item.id);setError('')
+    const [purchase,parts]=await Promise.all([supabase.from('ordenes_compra').select('tipo_compra,precio_en_pie,precio_europa,precio_eeuu,precio_segunda_gruesa,precio_segunda_menuda,precio_rechazo,precio_campo').eq('id',item.orden_compra_id).single(),supabase.from('boleta_rendimientos').select('calidad,kg_resultado,paga_productor').eq('boleta_id',item.id)])
+    if(purchase.error||parts.error){setClosing(null);setError(`No se pudo revisar la liquidación: ${(purchase.error||parts.error).message}`);return}
+    const order=purchase.data
+    let estimate=0
+    const breakdown=[]
+    if(order.tipo_compra==='En pie'){estimate=Number(order.precio_en_pie||0);breakdown.push(`Compra en pie: ${money.format(estimate)}`)}
+    else for(const part of parts.data||[]){if(!part.paga_productor)continue
+      const quality=part.calidad
+      const rate=quality==='Exportable Europa'?order.precio_europa:quality==='Exportable estadounidense'?order.precio_eeuu:quality==='Segunda gruesa'?order.precio_segunda_gruesa:quality==='Segunda menuda'?order.precio_segunda_menuda:quality.startsWith('Rechazo')?order.precio_rechazo:order.precio_campo
+      if(rate===null||rate===undefined){setClosing(null);setError(`Falta el precio de ${quality} en la orden de compra.`);return}
+      estimate+=Number(part.kg_resultado||0)/46*Number(rate)
+      breakdown.push(`${quality}: ${Number(part.kg_resultado||0).toLocaleString('es-CR')} kg × ${money.format(rate)} por quintal`)
+    }
+    setClosing(null)
+    if(!window.confirm(`Boleta ${item.codigo}\n\n${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.\n\n¿Finalizar y sellar esta boleta?`))return
+    setClosing(item.id)
+    const {data,error:failure}=await supabase.rpc('finalizar_boleta_entrada',{p_boleta_id:item.id})
+    setClosing(null)
+    if(failure){setError(`No se pudo finalizar: ${failure.message}`);return}
+    setItems(current=>current.map(b=>b.id===item.id?{...b,finalizada_en:new Date().toISOString(),monto_cxp:data}:b))
+  }
+  const finishOrder=async item=>{
+    const amount=(item.ordenes_venta_lineas||[]).reduce((sum,line)=>sum+Number(line.total||0),0)
+    if(!window.confirm(`Pedido ${item.codigo}\n\nCuenta por cobrar: ${new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(amount)}.\n\n¿Finalizar el pedido? Todas las cajas y sus boletas deben estar completas.`))return
+    setClosing(item.id);setError('')
+    const {data,error:failure}=await supabase.rpc('finalizar_orden_venta',{p_orden_id:item.id})
+    setClosing(null)
+    if(failure){setError(`No se pudo finalizar: ${failure.message}`);return}
+    setItems(current=>current.map(o=>o.id===item.id?{...o,finalizada_en:new Date().toISOString(),monto_cxc:data}:o))
+  }
   const rows=useMemo(()=>items.map((item,index)=>({
     key:item.id||index,
     item,
     codigo:item.codigo||`${title==='Proveedores'?'PR':'CL'}-${String(index+1).padStart(3,'0')}`,
     principal:title==='Boletas de entrada'?(receiptOrders[item.orden_compra_id]?.productor_nombre||item.producto||'Productor pendiente'):item.nombre||item.productor_nombre||item.producto||item.mercado||'Registro',
     detalle:title==='Boletas de entrada'?`${item.producto||receiptOrders[item.orden_compra_id]?.producto||'Producto'} · ${receiptOrders[item.orden_compra_id]?.codigo||'Sin orden de compra'}`:item.tipo||item.lugar||item.finca_lugar||item.mercado||item.observaciones||'Sin detalle',
-    estado:item.estado||(item.activo===false?'Inactivo':'Activo'),
-    monto:title==='Órdenes de venta'&&item.ordenes_venta_lineas?new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(item.ordenes_venta_lineas.reduce((sum,l)=>sum+Number(l.total||0),0)):item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
-  })).filter(r=>`${r.codigo} ${r.principal} ${r.detalle} ${r.estado}`.toLowerCase().includes(search.toLowerCase())),[items,search,title,receiptOrders])
-  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel"><div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{loading?<div className="empty"><p>Cargando información…</p></div>:error?<div className="formerror">{error} <button type="button" onClick={()=>setRetry(n=>n+1)}>Reintentar</button></div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong><button className={['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)}>{['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
+    estado:title==='Órdenes de compra'?(closedPurchases[item.id]?'Sellada':'Pendiente'):['Boletas de entrada','Órdenes de venta'].includes(title)?(item.finalizada_en?'Finalizada':'Pendiente'):item.estado||(item.activo===false?'Inactivo':'Activo'),
+    monto:title==='Boletas de entrada'&&item.finalizada_en&&role!=='planta'?money.format(item.monto_cxp||0):title==='Órdenes de venta'&&item.finalizada_en?new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(item.monto_cxc||0):title==='Órdenes de venta'&&item.ordenes_venta_lineas?new Intl.NumberFormat('es-CR',{style:'currency',currency:'USD'}).format(item.ordenes_venta_lineas.reduce((sum,l)=>sum+Number(l.total||0),0)):item.kg_estimados?`${Number(item.kg_estimados).toLocaleString('es-CR')} kg`:item.moneda||''
+  })).filter(r=>(!['Boletas de entrada','Órdenes de venta','Órdenes de compra'].includes(title)||((title==='Órdenes de compra'?Boolean(closedPurchases[r.item.id]):Boolean(r.item.finalizada_en))===history&&(week==='all'||weekOf(r.item.fecha_hora||r.item.fecha)===week)))&&`${r.codigo} ${r.principal} ${r.detalle} ${r.estado}`.toLowerCase().includes(search.toLowerCase())),[items,search,title,receiptOrders,closedPurchases,history,role,week])
+  return <><div className="modulebar"><div><p>Administre y consulte la información de {title.toLowerCase()}.</p></div>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Nuevo registro</button>}</div><section className="panel tablepanel">{['Boletas de entrada','Órdenes de venta','Órdenes de compra'].includes(title)&&<div className="load-selector"><button type="button" className={!history?'primary':''} onClick={()=>setHistory(false)}>Pendientes</button><button type="button" className={history?'primary':''} onClick={()=>setHistory(true)}>Historial de finalizadas</button><label>Semana<select value={week} onChange={e=>setWeek(e.target.value)}><option value="all">Todas las semanas</option>{[...new Set([weekOf(new Date()),...items.map(x=>weekOf(x.fecha_hora||x.fecha))])].filter(Boolean).sort().reverse().map(x=><option key={x} value={x}>Semana {Number(x.slice(-2))} · {x.slice(0,4)}</option>)}</select></label></div>}<div className="filters"><label><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por código, nombre o estado…"/></label><button>Todos los estados</button></div>{error&&<div className="formerror">{error} <button type="button" onClick={()=>setRetry(n=>n+1)}>Reintentar</button></div>}{loading?<div className="empty"><p>Cargando información…</p></div>:rows.length?<div className="rows">{rows.map(r=><article key={r.key}><div className="code">{r.codigo}</div><div className="who"><b>{r.principal}</b><span>{r.detalle}</span></div><span className="pill">{r.estado}</span><strong>{r.monto}</strong>{title==='Órdenes de venta'&&!r.item.finalizada_en&&['administrador','oficina'].includes(role)&&<button type="button" onClick={()=>finishOrder(r.item)} disabled={closing===r.item.id}>{closing===r.item.id?'Finalizando…':'Finalizar pedido'}</button>}{title==='Boletas de entrada'&&!r.item.finalizada_en&&['administrador','oficina'].includes(role)&&<button type="button" onClick={()=>finish(r.item)} disabled={closing===r.item.id}>{closing===r.item.id?'Finalizando…':'Finalizar'}</button>}<button className={['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'arrow edit-client':'arrow'} type="button" onClick={()=>onEdit(r.item)} aria-label={`Editar ${r.principal}`} disabled={!['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)||['Boletas de entrada','Órdenes de venta'].includes(title)&&!!r.item.finalizada_en||title==='Órdenes de compra'&&!!closedPurchases[r.item.id]}>{['Clientes','Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title)?'Editar':<ChevronRight/>}</button></article>)}</div>:<div className="empty"><PackageCheck size={42}/><h3>Sin registros todavía</h3><p>{['Boletas de entrada','Órdenes de venta','Órdenes de compra'].includes(title)?(history?'Todavía no hay registros finalizados.':'No hay registros pendientes.'):table?`Puede crear el primer registro de ${title.toLowerCase()}.`:'Este módulo se conectará en la siguiente etapa.'}</p>{table&&<button className="primary" onClick={onNew}><Plus size={18}/>Crear registro</button>}</div>}</section></>
 }
 
 
