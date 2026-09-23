@@ -144,10 +144,11 @@ function Module({title,role,search,setSearch,onNew,onEdit,refresh}){
     if(purchase.error||parts.error){setClosing(null);setError(`No se pudo revisar la liquidación: ${(purchase.error||parts.error).message}`);return}
     const order=purchase.data
     if(order.producto==='Ñampí'&&order.tipo_compra==='En pie'){setClosing(null);setError('Esta compra de ñampí en pie permanece abierta para registrar entregas y rendimientos; su pago está en cuentas por pagar desde la orden.');return}
+    const fixedTruck=order.tipo_compra==='Puesto en camión'
     let estimate=0
     const breakdown=[]
     if(order.tipo_compra==='En pie'){estimate=Number(order.precio_en_pie||0);breakdown.push(`Compra en pie: ${money.format(estimate)}`)}
-    else for(const part of parts.data||[]){if(!part.paga_productor)continue
+    else for(const part of parts.data||[]){if(fixedTruck||!part.paga_productor)continue
       const quality=part.calidad
       const rate=order.producto==='Ñampí'?order.precio_campo:quality==='Exportable Europa'?order.precio_europa:quality==='Exportable estadounidense'?order.precio_eeuu:quality==='Segunda gruesa'?order.precio_segunda_gruesa:quality==='Segunda menuda'?order.precio_segunda_menuda:quality.startsWith('Rechazo')?order.precio_rechazo:order.precio_campo
       if(rate===null||rate===undefined){setClosing(null);setError(`Falta el precio de ${quality} en la orden de compra.`);return}
@@ -155,7 +156,7 @@ function Module({title,role,search,setSearch,onNew,onEdit,refresh}){
       breakdown.push(`${quality}: ${Number(part.kg_resultado||0).toLocaleString('es-CR')} kg × ${money.format(rate)} por quintal`)
     }
     setClosing(null)
-    if(!window.confirm(`Boleta ${item.codigo}\n\n${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.\n\n¿Finalizar y sellar esta boleta?`))return
+    if(!window.confirm(`Boleta ${item.codigo}\n\n${fixedTruck?'Compra puesta en camión: el precio fijo y el flete figuran por separado en cuentas por pagar desde que se guardó la orden. El rendimiento no cambia el pago al agricultor.':`${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.`}\n\n¿Finalizar y sellar esta boleta?`))return
     setClosing(item.id)
     const {data,error:failure}=await supabase.rpc('finalizar_boleta_entrada',{p_boleta_id:item.id})
     setClosing(null)
