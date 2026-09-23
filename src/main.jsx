@@ -10,16 +10,17 @@ import SupplyInventory from './supply-inventory'
 import PlasticCrates from './plastic-crates'
 import SecondInventory from './second-inventory'
 import Finance,{cash,useFinance} from './finance'
+import LoadMap from './load-map'
 import PlantReceipt from './plant-receipt'
 import Workers from './workers'
 
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
-  ['Producción y rendimientos', Factory], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
+  ['Producción y rendimientos', Factory], ['Mapa de carga', PackageCheck], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
   ['Cuentas por cobrar', ArrowUpRight], ['Cuentas por pagar', ArrowDownRight], ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
 ]
-const visibleSections={planta:['Boletas de entrada'],bodega:['Inventario de cartones','Inventario de insumos','Cajas plásticas'],finca:[],chofer:[]}
+const visibleSections={planta:['Boletas de entrada','Mapa de carga'],bodega:['Inventario de cartones','Inventario de insumos','Cajas plásticas'],finca:[],chofer:[]}
 
 
 const money = new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:0})
@@ -38,7 +39,7 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:['Finanzas','Bancos','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:['Finanzas','Bancos','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
