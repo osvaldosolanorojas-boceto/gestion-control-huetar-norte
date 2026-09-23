@@ -1,6 +1,8 @@
 # Corte semanal de operación — diseño para revisión
 
-Estado: propuesta de diseño. No se han creado gastos ni liquidaciones automáticamente.
+Estado: primera captura operativa disponible en **Corte semanal**. El resultado se muestra como parcial y no se han creado gastos ni liquidaciones automáticamente.
+
+La primera versión permite capturar planilla por trabajador, materiales valorizados manualmente, servicios, transporte y gastos de contenedor; editar o anular cada partida; y consultar ventas locales, pedidos y boletas finalizados de la semana. Aún falta definir y automatizar tarifas de planilla, valoración por lote de inventarios, conversión de monedas y criterios de reparto. No existe botón de cierre definitivo hasta que esas reglas se aprueben.
 
 ## Período y dos vistas distintas
 
