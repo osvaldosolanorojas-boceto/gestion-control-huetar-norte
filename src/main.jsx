@@ -9,6 +9,7 @@ import CartonInventory from './carton-inventory'
 import SupplyInventory from './supply-inventory'
 import PlasticCrates from './plastic-crates'
 import SecondInventory from './second-inventory'
+import Finance,{cash,useFinance} from './finance'
 import PlantReceipt from './plant-receipt'
 import Workers from './workers'
 
@@ -16,7 +17,7 @@ import Workers from './workers'
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
   ['Producción y rendimientos', Factory], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck], ['Inventario de cartones', PackageCheck], ['Inventario de insumos', PackageCheck], ['Cajas plásticas', PackageCheck], ['Finanzas', WalletCards],
-  ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
+  ['Cuentas por cobrar', ArrowUpRight], ['Cuentas por pagar', ArrowDownRight], ['Bancos', Landmark], ['Proveedores', Users], ['Clientes', UserRound], ['Trabajadores', Users]
 ]
 const visibleSections={planta:['Boletas de entrada'],bodega:['Inventario de cartones','Inventario de insumos','Cajas plásticas'],finca:[],chofer:[]}
 
@@ -37,7 +38,7 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:['Finanzas','Bancos','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Trabajadores'?<Workers/>:<Module title={section} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
@@ -52,19 +53,20 @@ function App({profile}){
 }
 
 
-function Dashboard({go,profile}){return <>
-  {!isSupabaseReady&&<div className="notice"><b>Modo de preparación:</b> la interfaz está funcionando. Falta conectar las claves privadas del proyecto Supabase.</div>}
-  <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>La sesión está conectada de forma segura con Supabase.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
-  <div className="stats">
-    <Stat title="Ventas de la semana" value="US$ 248.760" note="8 contenedores" up icon={CircleDollarSign}/>
-    <Stat title="Compras de campo" value={money.format(42780000)} note="34 órdenes" icon={ShoppingCart}/>
-    <Stat title="Cuentas por cobrar" value="US$ 186.420" note="US$ 61.300 vencido" warning icon={ArrowUpRight}/>
-    <Stat title="Cuentas por pagar" value={money.format(68450000)} note="₡ 18.240.000 esta semana" icon={ArrowDownRight}/>
-  </div>
-  <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Producción y despachos de hoy</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>8</b><span>Boletas recibidas</span></div><div><b>42.680</b><span>kg procesados</span></div><div><b>3</b><span>Contenedores listos</span></div><div><b>86,4%</b><span>Rendimiento exportable</span></div></div></section>
-  <section className="panel"><div className="panelhead"><div><h3>Próximos movimientos</h3><p>Pagos y cobros prioritarios</p></div></div><ul className="moves"><li><i className="red"/><div><b>Pago a proveedores</b><span>Hoy · 14 facturas</span></div><strong>₡ 18,2 M</strong></li><li><i className="blue"/><div><b>Cobro Grupo Plátanos López</b><span>Mañana · 2 facturas</span></div><strong>US$ 54.900</strong></li><li><i className="yellow"/><div><b>Planilla semanal</b><span>Viernes · Campo y planta</span></div><strong>₡ 12,8 M</strong></li></ul></section></div>
-  <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Nueva compra</button><button onClick={()=>go('Boletas de entrada')}><Truck/>Recibir producto</button><button onClick={()=>go('Finanzas')}><WalletCards/>Registrar gasto</button><button onClick={()=>go('Bancos')}><Landmark/>Conciliar bancos</button></div></section>
-  </>}
+function Dashboard({go,profile,refresh}){
+  const {data,error,loading}=useFinance(),[plant,setPlant]=useState({count:0,kg:0})
+  useEffect(()=>{let active=true;supabase.from('boletas_entrada').select('kg_estimados').then(({data:receipts})=>{if(active)setPlant({count:receipts?.length||0,kg:(receipts||[]).reduce((sum,r)=>sum+Number(r.kg_estimados||0),0)})});return()=>{active=false}},[refresh])
+  const receivable=currency=>data.receivables.filter(r=>r.moneda===currency).reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
+  const payable=data.payables.filter(r=>r.etapa!=='Faltan precios').reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
+  const date=new Date(),start=new Date(date);start.setDate(date.getDate()-((date.getDay()+6)%7));const pad=n=>String(n).padStart(2,'0');const monday=`${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`
+  const weeklySales=data.receivables.filter(r=>r.fecha>=monday&&r.moneda==='USD').reduce((sum,r)=>sum+Number(r.monto),0)
+  const weeklyLocal=data.receivables.filter(r=>r.fecha>=monday&&r.moneda==='CRC').reduce((sum,r)=>sum+Number(r.monto),0)
+  return <>{!isSupabaseReady&&<div className="notice">Falta conectar Supabase.</div>}
+  <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>Resumen calculado a partir de los registros guardados.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
+  {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><div className="stats"><Stat title="Pedidos USD esta semana" value={cash(weeklySales,'USD')} note="Valor previsto de órdenes" icon={CircleDollarSign}/><Stat title="Ventas locales esta semana" value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/><Stat title="Por cobrar USD" value={cash(receivable('USD'),'USD')} note={`${data.receivables.length} ventas y pedidos`} icon={ArrowUpRight}/><Stat title="Por pagar estimado" value={cash(payable)} note="Compras con rendimiento y precio" icon={ArrowDownRight}/></div>
+  <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Datos registrados</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>{plant.count}</b><span>Boletas recibidas</span></div><div><b>{plant.kg.toLocaleString('es-CR')}</b><span>kg estimados de ingreso</span></div></div></section><section className="panel"><div className="panelhead"><div><h3>Por cobrar y bancos</h3><p>Colones y dólares se muestran separados</p></div></div><div className="finance-summary"><article><span>Por cobrar CRC</span><strong>{cash(receivable('CRC'))}</strong></article><article><span>Cuentas bancarias</span><strong>{data.accounts.length}</strong></article></div></section></div></>}
+  <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Compras</button><button onClick={()=>go('Cuentas por cobrar')}><ArrowUpRight/>Por cobrar</button><button onClick={()=>go('Cuentas por pagar')}><ArrowDownRight/>Por pagar</button><button onClick={()=>go('Bancos')}><Landmark/>Bancos</button></div></section></>
+}
 
 
 function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
