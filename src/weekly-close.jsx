@@ -10,7 +10,7 @@ const value=n=>n===''?null:Number(n)
 
 export default function WeeklyClose(){
   const [weekStart,setWeekStart]=useState(()=>sundayOf(costaRicaToday()))
-  const [records,setRecords]=useState({sales:[],purchases:[],fixedPurchases:[],freights:[],locals:[],costs:[]})
+  const [records,setRecords]=useState({sales:[],purchases:[],fixedPurchases:[],freights:[],locals:[],costs:[],notes:[],manual:[]})
   const [workers,setWorkers]=useState([]),[orders,setOrders]=useState([])
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[editing,setEditing]=useState(null),[form,setForm]=useState(blank),[saving,setSaving]=useState(false)
   const saturday=addDays(weekStart,6),next=addDays(weekStart,7),week=isoWeek(addDays(weekStart,1))
@@ -18,19 +18,21 @@ export default function WeeklyClose(){
     setLoading(true);setError('')
     const start=`${weekStart}T06:00:00Z`,end=`${next}T06:00:00Z`
     const results=await Promise.all([
-      supabase.from('ordenes_venta').select('id,codigo,monto_cxc,finalizada_en').gte('finalizada_en',start).lt('finalizada_en',end),
+      supabase.from('ordenes_venta').select('id,codigo,monto_cxc,moneda,finalizada_en').gte('finalizada_en',start).lt('finalizada_en',end),
       supabase.from('boletas_entrada').select('id,codigo,monto_cxp,finalizada_en').gte('finalizada_en',start).lt('finalizada_en',end),
       supabase.from('ventas_locales').select('id,codigo,fecha,moneda,ventas_segundas(subtotal)').gte('fecha',weekStart).lte('fecha',saturday),
       supabase.from('costos_operativos').select('*').gte('fecha',weekStart).lte('fecha',saturday).is('anulado_en',null).order('fecha',{ascending:false}).limit(1000),
       supabase.from('trabajadores').select('id,nombre').eq('activo',true).order('nombre').limit(1000),
       supabase.from('ordenes_venta').select('id,codigo,contenedor').order('creado_en',{ascending:false}).limit(1000),
       supabase.from('ordenes_compra').select('id,codigo,fecha,cantidad_comprada,peso_caja_camion_kg,precio_puesto_camion,rebaja_planilla_flete').eq('tipo_compra','Puesto en camión').neq('estado','Anulada').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('cxp_operativa').select('origen,origen_id,codigo,fecha,monto,contraparte').eq('origen','flete_compra').gte('fecha',weekStart).lte('fecha',saturday).limit(1000)
+      supabase.from('cxp_operativa').select('origen,origen_id,codigo,fecha,monto,contraparte').eq('origen','flete_compra').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
+      supabase.from('notas_credito_ventas').select('id,fecha,monto,motivo,ordenes_venta(codigo,moneda)').gte('fecha',weekStart).lte('fecha',saturday),
+      supabase.from('cuentas_manuales').select('id,codigo,fecha,tipo,monto,moneda').gte('fecha',weekStart).lte('fecha',saturday)
     ])
     setLoading(false)
     const failure=results.find(r=>r.error)?.error
     if(failure){setError(`No se pudo cargar el corte: ${failure.message}`);return}
-    setRecords({sales:results[0].data||[],purchases:results[1].data||[],locals:results[2].data||[],costs:results[3].data||[],fixedPurchases:results[6].data||[],freights:results[7].data||[]})
+    setRecords({sales:results[0].data||[],purchases:results[1].data||[],locals:results[2].data||[],costs:results[3].data||[],fixedPurchases:results[6].data||[],freights:results[7].data||[],notes:results[8].data||[],manual:results[9].data||[]})
     setWorkers(results[4].data||[]);setOrders(results[5].data||[])
   }
   useEffect(()=>{reload()},[weekStart])
@@ -68,8 +70,8 @@ export default function WeeklyClose(){
   return <><div className="modulebar"><div><p>Registre costos de la semana y vea ingresos y compras finalizados. El resultado es parcial hasta completar planilla, inventario y demás gastos.</p></div><button className="primary" onClick={()=>open()}><Plus size={18}/>Registrar costo</button></div>
     <div className="weekly-nav"><button onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Semana anterior</button><label>Semana {week.week} · {week.year}<input type="date" value={weekStart} onChange={e=>e.target.value&&setWeekStart(sundayOf(e.target.value))}/></label><span>Del {weekStart} al {saturday}</span><button onClick={()=>setWeekStart(next)}>Semana siguiente →</button></div>
     {error&&!editing&&<div className="formerror" role="alert">{error}</div>}
-    {loading?<div className="empty">Cargando el corte semanal…</div>:<><div className="bank-note">Resultado operativo <b>parcial</b>: se asignan ventas exportadas y compras por fecha de finalización; las compras puestas en camión y los fletes se asignan a la fecha de la orden. No vuelva a registrar esos fletes como costo manual. Los movimientos bancarios no se vuelven a sumar. Los importes en USD y CRC permanecen separados.</div>
-      <div className="weekly-grid">{['CRC','USD'].map(currency=>{const t=totals[currency],result=t.export+t.local-t.product-t.freight-t.costs;return <article key={currency}><small>{currency==='CRC'?'Colones':'Dólares'} · {currency}</small><div><span>Venta exportación finalizada</span><b>{money(t.export,currency)}</b></div><div><span>Venta local</span><b>{money(t.local,currency)}</b></div><div><span>Compra de producto y camiones</span><b>-{money(t.product,currency)}</b></div><div><span>Fletes de compra</span><b>-{money(t.freight,currency)}</b></div><div><span>Planilla y gastos registrados</span><b>-{money(t.costs,currency)}</b></div><div className="weekly-result"><span>Resultado parcial</span><strong>{money(result,currency)}</strong></div></article>})}</div>
+    {loading?<div className="empty">Cargando el corte semanal…</div>:<><div className="bank-note">Resultado operativo <b>parcial</b>: se asignan ventas exportadas y compras por fecha de finalización; las compras puestas en camión y los fletes se asignan a la fecha de la orden. No vuelva a registrar esos fletes como costo manual. Los movimientos bancarios no se vuelven a sumar. Las notas de crédito descuentan en la semana de emisión. Los importes en USD y CRC permanecen separados.</div>
+      <div className="weekly-grid">{['CRC','USD'].map(currency=>{const t=totals[currency],result=t.export+t.local+t.manualIncome-t.product-t.freight-t.costs-t.credits;return <article key={currency}><small>{currency==='CRC'?'Colones':'Dólares'} · {currency}</small><div><span>Venta exportación finalizada</span><b>{money(t.export,currency)}</b></div><div><span>Venta local</span><b>{money(t.local,currency)}</b></div><div><span>Ventas y cobros manuales</span><b>{money(t.manualIncome,currency)}</b></div><div><span>Notas de crédito (pérdida)</span><b>-{money(t.credits,currency)}</b></div><div><span>Compra de producto y camiones</span><b>-{money(t.product,currency)}</b></div><div><span>Fletes de compra</span><b>-{money(t.freight,currency)}</b></div><div><span>Planilla, gastos y cuentas manuales por pagar</span><b>-{money(t.costs,currency)}</b></div><div className="weekly-result"><span>Resultado parcial</span><strong>{money(result,currency)}</strong></div></article>})}</div>
       <div className="workers-panel"><h3>Gastos por categoría</h3>{Object.entries(labels).map(([category,name])=>{const parts=records.costs.filter(x=>x.categoria===category);return <article key={category}><div><b>{name}</b><span>{parts.length} registro(s)</span></div><strong>{['CRC','USD'].filter(currency=>parts.some(x=>x.moneda===currency)).map(currency=>`${money(parts.filter(x=>x.moneda===currency).reduce((sum,x)=>sum+Number(x.monto),0),currency)}`).join(' · ')||'Sin registrar'}</strong></article>})}</div>
       {records.costs.some(x=>x.orden_venta_id)&&<div className="workers-panel"><h3>Gastos asociados a pedidos</h3>{orders.filter(order=>records.costs.some(x=>x.orden_venta_id===order.id)).map(order=>{const parts=records.costs.filter(x=>x.orden_venta_id===order.id);return <article key={order.id}><div><b>{order.codigo} · {order.contenedor||'Sin contenedor'}</b><span>{parts.length} gasto(s) asociados</span></div><strong>{['CRC','USD'].filter(currency=>parts.some(x=>x.moneda===currency)).map(currency=>money(parts.filter(x=>x.moneda===currency).reduce((sum,x)=>sum+Number(x.monto),0),currency)).join(' · ')}</strong></article>})}</div>}
       <div className="workers-panel"><h3>Costos registrados en la semana</h3>{records.costs.map(row=><article key={row.id}><div><b>{row.fecha} · {labels[row.categoria]} · {row.concepto}</b><span>{row.trabajador_id?`${workers.find(w=>w.id===row.trabajador_id)?.nombre||'Trabajador'} · `:''}{row.orden_venta_id?`${orders.find(o=>o.id===row.orden_venta_id)?.codigo||'Pedido'} · `:''}{row.cantidad?`${row.cantidad} ${row.unidad} × ${money(row.tarifa,row.moneda)} · `:''}{row.referencia||'Sin referencia'}</span></div><strong>{money(row.monto,row.moneda)}</strong><button type="button" onClick={()=>open(row)}>Editar</button><button type="button" onClick={()=>voidCost(row)}>Anular</button></article>)}{!records.costs.length&&<p>Aún no se registraron planillas o gastos de esta semana.</p>}</div>

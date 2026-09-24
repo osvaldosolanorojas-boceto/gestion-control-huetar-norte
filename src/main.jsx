@@ -18,12 +18,13 @@ import Workers from './workers'
 import WeeklyClose from './weekly-close'
 import {addDays,costaRicaToday,isoWeek,mondayOf,sundayOf} from './weekly-model'
 import Farms from './farms'
+import Companies from './companies'
 
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
   ['Producción y rendimientos', Factory], ['Mapa de carga', PackageCheck], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck],
-  ['Proveedores', Users], ['Clientes', UserRound], ['Colaboradores', Users],
+  ['Proveedores', Users], ['Clientes', UserRound], ['Colaboradores', Users], ['Empresas', Landmark],
   ['Inventarios', PackageCheck], ['Finanzas', WalletCards], ['Efectivo', WalletCards], ['Bancos', Landmark], ['Corte semanal', CircleDollarSign], ['Fincas', PackageCheck]
 ]
 const inventorySections=[['Inventario de cartones',PackageCheck],['Inventario de insumos',PackageCheck],['Cajas plásticas',PackageCheck]]
@@ -71,13 +72,13 @@ function App({profile}){
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><div className="brandmark">HN</div><div><b>Gestión y Control</b><span>Huetar Norte S.A.</span></div><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
-      <nav>{nav.filter(([label])=>allowed.includes(label)).map(([label,Icon])=><button key={label} className={section===label||label==='Inventarios'&&inInventory(section)||label==='Finanzas'&&['Cuentas por cobrar','Cuentas por pagar'].includes(section)?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
+      <nav>{nav.filter(([label])=>allowed.includes(label)).map(([label,Icon])=><button key={label} className={section===label||label==='Inventarios'&&inInventory(section)||label==='Finanzas'&&['Cuentas por cobrar','Cuentas por pagar'].includes(section)||label==='Empresas'&&['Bancos Agro Solano','Efectivo Agro Solano'].includes(section)?'active':''} onClick={()=>go(label)}><Icon size={19}/><span>{label}</span></button>)}</nav>
       <div className="sidefoot"><button><Settings size={19}/>Configuración</button><button onClick={()=>supabase.auth.signOut()}><LogOut size={19}/>Cerrar sesión</button></div>
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Corte semanal'?<WeeklyClose/>:section==='Fincas'?<Farms/>:['Finanzas','Bancos','Efectivo','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Corte semanal'?<WeeklyClose/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} selectedWeek={salesWeek} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
@@ -97,11 +98,11 @@ function App({profile}){
 function Dashboard({go,profile,refresh}){
   const {data,error,loading}=useFinance(),[plant,setPlant]=useState({count:0,kg:0})
   useEffect(()=>{let active=true;supabase.from('boletas_entrada').select('kg_estimados').then(({data:receipts})=>{if(active)setPlant({count:receipts?.length||0,kg:(receipts||[]).reduce((sum,r)=>sum+Number(r.kg_estimados||0),0)})});return()=>{active=false}},[refresh])
-  const receivable=currency=>data.receivables.filter(r=>r.moneda===currency).reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
+  const receivable=currency=>data.receivables.filter(r=>r.moneda===currency&&r.etapa!=='Pedido previsto').reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
   const payable=data.payables.filter(r=>r.etapa!=='Faltan precios').reduce((sum,r)=>sum+Math.max(0,Number(r.monto)-Number(r.aplicado)),0)
   const weekStart=sundayOf(costaRicaToday())
-  const weeklySales=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='USD').reduce((sum,r)=>sum+Number(r.monto),0)
-  const weeklyLocal=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='CRC').reduce((sum,r)=>sum+Number(r.monto),0)
+  const weeklySales=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='USD'&&r.origen==='venta_exportacion').reduce((sum,r)=>sum+Number(r.monto),0)
+  const weeklyLocal=data.receivables.filter(r=>r.fecha>=weekStart&&r.moneda==='CRC'&&r.origen==='venta_local').reduce((sum,r)=>sum+Number(r.monto),0)
   return <>{!isSupabaseReady&&<div className="notice">Falta conectar Supabase.</div>}
   <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>Resumen calculado a partir de los registros guardados.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
   {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><div className="stats"><Stat title="Pedidos USD esta semana" value={cash(weeklySales,'USD')} note="Valor previsto de órdenes" icon={CircleDollarSign}/><Stat title="Ventas locales esta semana" value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/><Stat title="Por cobrar USD" value={cash(receivable('USD'),'USD')} note={`${data.receivables.length} ventas y pedidos`} icon={ArrowUpRight}/><Stat title="Por pagar estimado" value={cash(payable)} note="Compras con rendimiento y precio" icon={ArrowDownRight}/></div>
