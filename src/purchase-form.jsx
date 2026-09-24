@@ -46,7 +46,6 @@ export default function PurchaseOrderModal({order,close,onSaved,userId}){
   const pieHypothetical=['Ñampí','Cabeza de ñampí'].reduce((sum,product)=>sum+(pieYieldKg(product)+outsideKg(product))/46*Number(form[product==='Ñampí'?'precio_nampi_rendimiento':'precio_cabeza_rendimiento']||0),0)
   const pieMissingPrice=['Ñampí','Cabeza de ñampí'].some(product=>pieYieldKg(product)+outsideKg(product)>0&&form[product==='Ñampí'?'precio_nampi_rendimiento':'precio_cabeza_rendimiento']==='')
   const pieRealCost=Number(form.precio_en_pie||0)+Number(form.cuadrilla_arranca||0)+Number(form.flete||0)
-  const pieRevenue=sold.CRC+outsideSales.CRC+(sold.USD+outsideSales.USD)*Number(form.tipo_cambio_resultado||0)
   const fieldCrewCost=Number(form.cuadrilla_arranca||0)+Number(form.campo_encargados||0)+Number(form.campo_otros_costos||0)
   const fieldTotalCost=fieldFirstPay+fieldRejectPay+fieldCrewCost+Number(form.flete||0)
   useEffect(()=>{let active=true;supabase.from('proveedores').select('id,nombre,telefono,residencia,cedula,zona,tipo,productos').eq('activo',true).order('nombre').then(({data,error:loadError})=>{if(!active)return;if(loadError)setError('No se pudieron cargar los productores registrados.');else setProviders(data||[])});return()=>{active=false}},[])
@@ -61,6 +60,7 @@ export default function PurchaseOrderModal({order,close,onSaved,userId}){
   const pendingPrice=yieldDetails.some(r=>(truck||r.paga_productor)&&yieldAmount(r)===null)
   const yieldTotal=yieldDetails.reduce((sum,r)=>sum+(yieldAmount(r)||0),0)
   const sold=yieldDetails.reduce((totals,r)=>{const line=saleLines[r.orden_venta_linea_id],sale=line?.ordenes_venta;if(!sale?.finalizada_en)return totals;const currency=sale.moneda||'USD',amount=line.precio_quintal!=null?yieldKg(r)/46*Number(line.precio_quintal):Number(r.cajas||0)*Number(line.precio_caja||0);totals[currency]=(totals[currency]||0)+amount;return totals},{CRC:0,USD:0})
+  const pieRevenue=sold.CRC+outsideSales.CRC+(sold.USD+outsideSales.USD)*Number(form.tipo_cambio_resultado||0)
   const change=(name,value)=>setForm(current=>({...current,[name]:value}))
   const chooseProvider=value=>{const provider=providers.find(item=>item.id===value);setForm(current=>({...current,proveedor_id:value,productor_nombre:provider?.nombre||'',productor_direccion:provider?.residencia||'',productor_telefono:provider?.telefono||'',productor_cedula:provider?.cedula||'',finca_lote_id:provider?.tipo==='Propio'?current.finca_lote_id:''}))}
   const createCarrier=async()=>{if(!newCarrier.trim()){setError('Escriba el nombre de quien hace el flete.');return}setSaving(true);setError('');const {data,error:e}=await supabase.from('proveedores').insert({nombre:newCarrier.trim(),tipo:'Transportista'}).select('id,nombre,tipo').single();setSaving(false);if(e){setError(`No se pudo guardar el transportista: ${e.message}`);return}setProviders(current=>[...current,data].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')));setForm(current=>({...current,flete_proveedor_id:data.id,transportista:data.nombre}));setNewCarrier('')}
