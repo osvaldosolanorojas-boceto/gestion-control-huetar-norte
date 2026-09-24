@@ -48,7 +48,7 @@ function weekOf(value){
 
 function App({profile}){
   const allowed=visibleSections[profile.rol]||nav.map(([label])=>label)
-  const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [refresh,setRefresh]=useState(0); const [salesWeek,setSalesWeek]=useState(()=>weekOf(costaRicaToday()))
+  const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [plantOrderId,setPlantOrderId]=useState(null); const [refresh,setRefresh]=useState(0); const [salesWeek,setSalesWeek]=useState(()=>weekOf(costaRicaToday()))
   const go=(x)=>{setSection(x);setOpen(false);setSearch('')}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
@@ -64,9 +64,9 @@ function App({profile}){
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} selectedWeek={salesWeek} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
       : section==='Órdenes de compra'
-        ? <PurchaseOrderModal order={editingClient} userId={profile.id} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
+        ? <PurchaseOrderModal order={editingClient} userId={profile.id} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}} onOpenReceipt={async receiptId=>{let selected=null;if(receiptId){const {data,error}=await supabase.from('boletas_entrada').select('*').eq('id',receiptId).single();if(error)throw error;selected=data}setPlantOrderId(editingClient.id);setEditingClient(selected);setSection('Boletas de entrada');setModal(true)}}/>
       : section==='Boletas de entrada'
-        ? <PlantReceipt receipt={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
+        ? <PlantReceipt receipt={editingClient} initialOrderId={plantOrderId} close={()=>{setModal(false);setEditingClient(null);setPlantOrderId(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setPlantOrderId(null);setRefresh(x=>x+1)}}/>
       : section==='Proveedores'
         ? <ProviderModal provider={editingClient} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
       : section==='Clientes'
