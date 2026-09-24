@@ -11,6 +11,7 @@ import CartonInventory from './carton-inventory'
 import SupplyInventory from './supply-inventory'
 import PlasticCrates from './plastic-crates'
 import SecondInventory from './second-inventory'
+import YucaBalance from './yuca-balance'
 import Finance,{cash,useFinance} from './finance'
 import LoadMap from './load-map'
 import PlantReceipt from './plant-receipt'
@@ -23,12 +24,12 @@ import Companies from './companies'
 
 const nav = [
   ['Resumen', LayoutDashboard], ['Órdenes de compra', ShoppingCart], ['Boletas de entrada', Truck],
-  ['Producción y rendimientos', Factory], ['Mapa de carga', PackageCheck], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck],
+  ['Producción y rendimientos', Factory], ['Mapa de carga', PackageCheck], ['Saldo yuca EE. UU.', PackageCheck], ['Segundas y rechazo', PackageCheck], ['Órdenes de venta', PackageCheck],
   ['Proveedores', Users], ['Clientes', UserRound], ['Colaboradores', Users], ['Empresas', Landmark],
   ['Inventarios', PackageCheck], ['Finanzas', WalletCards], ['Efectivo', WalletCards], ['Bancos', Landmark], ['Corte semanal', CircleDollarSign], ['Fincas', PackageCheck]
 ]
 const inventorySections=[['Inventario de cartones',PackageCheck],['Inventario de insumos',PackageCheck],['Cajas plásticas',PackageCheck]]
-const visibleSections={planta:['Boletas de entrada','Mapa de carga'],bodega:['Inventarios'],finca:[],chofer:[]}
+const visibleSections={planta:['Boletas de entrada','Mapa de carga','Saldo yuca EE. UU.'],bodega:['Inventarios'],finca:[],chofer:[]}
 const inInventory=section=>inventorySections.some(([label])=>label===section)
 function InventoryHome({go}){return <><div className="modulebar"><p>Seleccione el inventario que desea consultar o actualizar.</p></div><div className="module-hub">{inventorySections.map(([label,Icon])=><button key={label} type="button" onClick={()=>go(label)}><Icon size={26}/><span>{label}</span><ChevronRight size={20}/></button>)}</div></>}
 
@@ -59,7 +60,7 @@ function App({profile}){
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
       <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Corte semanal'?<WeeklyClose/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
+      <div className="content">{!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Saldo yuca EE. UU.'?<YucaBalance/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Corte semanal'?<WeeklyClose/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyInventory/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} selectedWeek={salesWeek} close={()=>{setModal(false);setEditingClient(null)}} onSaved={()=>{setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
