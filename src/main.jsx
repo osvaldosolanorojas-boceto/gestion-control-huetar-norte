@@ -152,12 +152,12 @@ function Module({title,role,search,setSearch,onNew,onEdit,refresh,salesWeek,setS
   }
   const finish=async item=>{
     setClosing(item.id);setError('')
-    const [purchase,parts]=await Promise.all([supabase.from('ordenes_compra').select('producto,tipo_compra,precio_en_pie,precio_europa,precio_eeuu,precio_segunda_gruesa,precio_segunda_menuda,precio_rechazo,precio_campo').eq('id',item.orden_compra_id).single(),supabase.from('boleta_rendimientos').select('calidad,kg_resultado,paga_productor,cajas,kg_manual,presentacion_kg').eq('boleta_id',item.id)])
+    const [purchase,parts]=await Promise.all([supabase.from('ordenes_compra').select('producto,tipo_compra,precio_en_pie,precio_europa,precio_eeuu,precio_segunda_gruesa,precio_segunda_menuda,precio_rechazo,precio_campo,campo_promedio_caja_kg').eq('id',item.orden_compra_id).single(),supabase.from('boleta_rendimientos').select('calidad,kg_resultado,paga_productor,cajas,kg_manual,presentacion_kg').eq('boleta_id',item.id)])
     if(purchase.error||parts.error){setClosing(null);setError(`No se pudo revisar la liquidación: ${(purchase.error||parts.error).message}`);return}
     const order=purchase.data
     if((parts.data||[]).some(part=>part.cajas>0&&part.kg_manual!==null)){setClosing(null);setError('Hay partidas con cajas y kilos manuales a la vez. Edite la boleta y guárdela para calcular el peso total por cajas antes de finalizar.');return}
     if(['Ñampí','Cabeza de ñampí'].includes(order.producto)&&order.tipo_compra==='En pie'){setClosing(null);setError('Esta compra en pie permanece abierta para registrar entregas y rendimientos; su pago está en cuentas por pagar desde la orden.');return}
-    const fixedTruck=order.tipo_compra==='Puesto en camión'
+    const fixedTruck=order.tipo_compra==='Puesto en camión'||order.tipo_compra==='En campo'&&order.campo_promedio_caja_kg!=null
     let estimate=0
     const breakdown=[]
     if(order.tipo_compra==='En pie'){estimate=Number(order.precio_en_pie||0);breakdown.push(`Compra en pie: ${money.format(estimate)}`)}
@@ -169,7 +169,7 @@ function Module({title,role,search,setSearch,onNew,onEdit,refresh,salesWeek,setS
       breakdown.push(`${quality}: ${Number(part.kg_resultado||0).toLocaleString('es-CR')} kg × ${money.format(rate)} por quintal`)
     }
     setClosing(null)
-    if(!window.confirm(`Boleta ${item.codigo}\n\n${fixedTruck?'Compra puesta en camión: el precio fijo y el flete figuran por separado en cuentas por pagar desde que se guardó la orden. El rendimiento no cambia el pago al agricultor.':`${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.`}\n\n¿Finalizar y sellar esta boleta?`))return
+    if(!window.confirm(`Boleta ${item.codigo}\n\n${fixedTruck?'Compra con pago pactado: la cuenta del productor y el flete figuran por separado desde que se guardó la orden. El rendimiento de planta solo sirve para comparar y no cambia el pago.':`${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.`}\n\n¿Finalizar y sellar esta boleta?`))return
     setClosing(item.id)
     const {data,error:failure}=await supabase.rpc('finalizar_boleta_entrada',{p_boleta_id:item.id})
     setClosing(null)
