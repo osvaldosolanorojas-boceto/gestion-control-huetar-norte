@@ -51,3 +51,9 @@
 .payable-group summary button{padding:8px 13px;border:1px solid #1767bb;border-radius:8px;background:#eaf2fd;color:#124f92;font-weight:800}@media(max-width:760px){.payable-group summary{flex-wrap:wrap}.payable-group summary button{margin-left:auto}.payable-group>div{padding-left:0}}
 .purchase-comparison{margin:10px 0;padding:10px 14px;border:1px solid #d6e4f7;border-radius:8px;background:#f3f7fd}.purchase-comparison summary{cursor:pointer;color:#154c8c}.purchase-comparison[open] summary{margin-bottom:9px}.purchase-comparison span,.purchase-comparison small{display:block;margin-top:5px;line-height:1.45}
 .pie-plant-products{margin:12px 24px;padding:14px;border:1px solid #b7d3f5;border-radius:12px;background:#f2f7ff}.pie-plant-products p{margin:0 0 10px;color:#304966}.pie-plant-products small{display:block;margin-top:9px;color:#425a77}.pie-plant-buttons,.pie-purchase-receipts{display:flex;flex-wrap:wrap;gap:8px;margin:10px 24px 16px}.pie-plant-buttons{margin:0}.pie-plant-buttons button,.pie-purchase-receipts button{display:inline-flex;align-items:center;gap:6px;padding:10px 12px;border:1px solid #1767bb;border-radius:9px;background:#eaf2ff;color:#124f92;font-weight:700;cursor:pointer}.pie-plant-buttons button:hover,.pie-purchase-receipts button:hover{background:#d7e9ff}
+.balance-week{margin-bottom:20px;padding:20px}
+.balance-week h3{margin:0 0 8px}
+.balance-item{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 0;border-top:1px solid #e2e8f0}
+.balance-item div{display:grid;gap:4px}
+.balance-item small{color:#526174}
+@media(max-width:650px){.balance-item{align-items:flex-start;flex-direction:column}}
