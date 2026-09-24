@@ -19,6 +19,12 @@ export default function ClientModal({client,close,onSaved}){
     if(saveError){setError(`No se pudo guardar: ${saveError.message}`);return}
     onSaved(result.data)
   }
+  const remove=async()=>{
+    if(!window.confirm(`¿Eliminar a ${client.nombre} de la lista de clientes? Sus pedidos y cuentas anteriores conservarán el historial.`))return
+    setSaving(true);setError('')
+    const {error:failure}=await supabase.rpc('retirar_registro',{p_tipo:'cliente',p_id:client.id})
+    setSaving(false);if(failure){setError(`No se pudo eliminar: ${failure.message}`);return}onSaved({id:client.id,nombre:client.nombre})
+  }
   return <div className="modalwrap"><div className="modal realform clientform"><div className="modalhead"><div><span>{client?'EDITAR REGISTRO':'NUEVO REGISTRO'}</span><h2>Ficha del cliente</h2></div><button onClick={close}><X/></button></div>
     <div className="formsection"><h3>Identificación y destino</h3><div className="formgrid">
       <label>Nombre comercial *<input name="nombre" value={form.nombre} onChange={change} placeholder="Ejemplo: J&C Tropicals"/></label><label>Razón social<input name="razon_social" value={form.razon_social} onChange={change}/></label>
@@ -39,7 +45,6 @@ export default function ClientModal({client,close,onSaved}){
       <label>Naviera o transportista habitual<input name="naviera" value={form.naviera} onChange={change}/></label><label>Enlace del logo<input name="logo_url" type="url" value={form.logo_url} onChange={change} placeholder="https://…"/></label>
       <label className="wide">Observaciones<textarea name="observaciones" value={form.observaciones} onChange={change} rows="3" placeholder="Información adicional…"/></label><label className="checklabel"><input name="activo" type="checkbox" checked={form.activo} onChange={change}/> Cliente activo</label>
     </div></div>
-    {error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':client?'Guardar cambios':'Guardar cliente'}</button></div>
+    {error&&<div className="formerror">{error}</div>}<div className="modalactions">{client?.activo&&<button className="danger-action" type="button" onClick={remove} disabled={saving}>Eliminar cliente</button>}<button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':client?'Guardar cambios':'Guardar cliente'}</button></div>
   </div></div>
 }
-
