@@ -17,10 +17,16 @@ export default function ProviderModal({provider,close,onSaved}){
     if(failure){setError(`No se pudo guardar: ${failure.message}`);return}
     onSaved()
   }
+  const remove=async()=>{
+    if(!window.confirm(`¿Eliminar a ${provider.nombre} de la lista de proveedores? Sus compras y pagos anteriores conservarán el historial.`))return
+    setSaving(true);setError('')
+    const {error:failure}=await supabase.rpc('retirar_registro',{p_tipo:'proveedor',p_id:provider.id})
+    setSaving(false);if(failure){setError(`No se pudo eliminar: ${failure.message}`);return}onSaved()
+  }
   return <div className="modalwrap"><div className="modal realform clientform"><div className="modalhead"><div><span>{provider?'EDITAR REGISTRO':'NUEVO REGISTRO'}</span><h2>Ficha del proveedor</h2></div><button onClick={close} aria-label="Cerrar"><X/></button></div><div className="formsection"><h3>Datos del proveedor</h3><div className="formgrid">
     <label>Nombre completo o razón social *<input name="nombre" value={form.nombre} onChange={change}/></label><label>Cédula o identificación<input name="cedula" value={form.cedula} onChange={change}/></label>
     <label>Teléfono<input name="telefono" type="tel" value={form.telefono} onChange={change}/></label><label>Tipo<select name="tipo" value={form.tipo} onChange={change}><option>Agricultor</option><option>Intermediario</option><option>Propio</option><option>Transportista</option></select></label>
     <label>Residencia<input name="residencia" value={form.residencia} onChange={change}/></label><label>Zona<input name="zona" value={form.zona} onChange={change}/></label>
     <label className="wide">Productos (separados por coma)<input value={products} onChange={e=>setProducts(e.target.value)} placeholder="Yuca, ñampí…"/></label><label className="checklabel"><input type="checkbox" name="activo" checked={form.activo} onChange={change}/> Proveedor activo</label>
-  </div></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions"><button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':provider?'Guardar cambios':'Guardar proveedor'}</button></div></div></div>
+  </div></div>{error&&<div className="formerror">{error}</div>}<div className="modalactions">{provider?.activo&&<button className="danger-action" type="button" onClick={remove} disabled={saving}>Eliminar proveedor</button>}<button onClick={close} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':provider?'Guardar cambios':'Guardar proveedor'}</button></div></div></div>
 }
