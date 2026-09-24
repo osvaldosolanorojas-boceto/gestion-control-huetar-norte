@@ -57,3 +57,5 @@
 .balance-item div{display:grid;gap:4px}
 .balance-item small{color:#526174}
 @media(max-width:650px){.balance-item{align-items:flex-start;flex-direction:column}}
+.modalactions .danger-action{margin-right:auto;color:#a51c30;border:1px solid #e6b2b8;background:#fff5f5}
+.modalactions .danger-action:hover{background:#ffe4e6}
