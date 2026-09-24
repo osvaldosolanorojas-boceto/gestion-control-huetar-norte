@@ -6,5 +6,64 @@
     <meta name="theme-color" content="#103b7a" />
     <title>Gestión y Control — Huetar Norte</title>
   </head>
-  <body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      (() => {
+        let checking = false
+        let pendingVersion = ''
+        let observer
+        const hasOpenForm = () => Boolean(document.querySelector('.modalwrap'))
+        const update = version => {
+          if (hasOpenForm()) {
+            pendingVersion = version
+            if (!document.getElementById('app-update-notice')) {
+              const notice = document.createElement('div')
+              notice.id = 'app-update-notice'
+              notice.setAttribute('role', 'status')
+              notice.style.cssText = 'position:fixed;bottom:env(safe-area-inset-bottom, 0px);left:12px;right:12px;z-index:100000;padding:14px;border-radius:12px;background:#103b7a;color:white;box-shadow:0 4px 16px #0005;font:15px system-ui,sans-serif'
+              notice.textContent = 'Hay una actualización. Guarde o cierre el formulario para aplicarla automáticamente.'
+              document.body.appendChild(notice)
+            }
+            if (!observer) {
+              observer = new MutationObserver(() => {
+                if (pendingVersion && !hasOpenForm()) {
+                  observer.disconnect()
+                  observer = null
+                  update(pendingVersion)
+                }
+              })
+              observer.observe(document.getElementById('root'), {childList: true, subtree: true})
+            }
+            return
+          }
+          const next = new URL(window.location.href)
+          if (next.searchParams.get('v') === version) return
+          next.searchParams.set('v', version)
+          window.location.replace(next.href)
+        }
+        const checkVersion = async () => {
+          if (document.visibilityState === 'hidden' || checking) return
+          if (new URLSearchParams(location.search).has('code') || /access_token=|type=recovery/.test(location.hash)) return
+          checking = true
+          try {
+            const url = new URL(location.href)
+            url.searchParams.set('version_check', String(Date.now()))
+            const response = await fetch(url.href, {cache: 'no-store'})
+            if (!response.ok) return
+            const latest = new DOMParser().parseFromString(await response.text(), 'text/html').querySelector('script[type="module"][src]')?.getAttribute('src')
+            const current = document.querySelector('script[type="module"][src]')?.getAttribute('src')
+            if (latest && current && latest !== current) update(new URL(latest, location.href).pathname.split('/').pop())
+          } catch { /* Se volverá a revisar cuando haya conexión. */ }
+          finally { checking = false }
+        }
+        window.addEventListener('pageshow', checkVersion)
+        window.addEventListener('focus', checkVersion)
+        document.addEventListener('visibilitychange', checkVersion)
+        window.setInterval(checkVersion, 30000)
+        checkVersion()
+      })()
+    </script>
+  </body>
 </html>
