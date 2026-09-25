@@ -39,8 +39,8 @@
             return
           }
           const next = new URL(window.location.href)
-          if (next.searchParams.get('v') === version) return
           next.searchParams.set('v', version)
+          next.searchParams.set('actualiza', String(Date.now()))
           window.location.replace(next.href)
         }
         const checkVersion = async () => {
