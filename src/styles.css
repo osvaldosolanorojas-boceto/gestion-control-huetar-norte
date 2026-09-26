@@ -66,3 +66,5 @@
 .order-needs th,.order-needs td{padding:10px;text-align:left;border-bottom:1px solid #e5e7eb}
 .order-needs th{font-size:.8rem;color:#526070}
 .order-needs .sale-help{margin-top:14px}
+.order-needs-detail{display:grid;gap:8px;padding:8px 0}
+.order-needs-detail>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:8px;background:#f3f7fb;border-radius:6px}
