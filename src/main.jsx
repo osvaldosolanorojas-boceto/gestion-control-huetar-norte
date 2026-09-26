@@ -21,6 +21,7 @@ import {addDays,costaRicaToday,isoWeek,mondayOf,sundayOf} from './weekly-model'
 import Farms from './farms'
 import Companies from './companies'
 import UsersSettings from './users-settings'
+import OrderNeeds from './order-needs'
 
 
 const nav = [
@@ -90,6 +91,7 @@ function Dashboard({go,profile,refresh}){
   <section className="hero"><div><span>ACCESO {profile.rol.toUpperCase()}</span><h2>Buenos días, {profile.nombre.split(' ')[0]}</h2><p>Resumen calculado a partir de los registros guardados.</p></div><button onClick={()=>go('Órdenes de venta')}><Plus size={18}/> Nueva orden de venta</button></section>
   {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><div className="stats"><Stat title="Pedidos USD esta semana" value={cash(weeklySales,'USD')} note="Valor previsto de órdenes" icon={CircleDollarSign}/><Stat title="Ventas locales esta semana" value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/><Stat title="Por cobrar USD" value={cash(receivable('USD'),'USD')} note={`${data.receivables.length} ventas y pedidos`} icon={ArrowUpRight}/><Stat title="Por pagar estimado" value={cash(payable)} note="Compras con rendimiento y precio" icon={ArrowDownRight}/></div>
   <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Datos registrados</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>{plant.count}</b><span>Boletas recibidas</span></div><div><b>{plant.kg.toLocaleString('es-CR')}</b><span>kg estimados de ingreso</span></div></div></section><section className="panel"><div className="panelhead"><div><h3>Por cobrar y bancos</h3><p>Colones y dólares se muestran separados</p></div></div><div className="finance-summary"><article><span>Por cobrar CRC</span><strong>{cash(receivable('CRC'))}</strong></article><article><span>Cuentas bancarias</span><strong>{data.accounts.filter(account=>account.tipo_cuenta==='banco').length}</strong></article></div></section></div></>}
+  <OrderNeeds refresh={refresh}/>
   <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Compras</button><button onClick={()=>go('Cuentas por cobrar')}><ArrowUpRight/>Por cobrar</button><button onClick={()=>go('Cuentas por pagar')}><ArrowDownRight/>Por pagar</button><button onClick={()=>go('Bancos')}><Landmark/>Bancos</button><button onClick={()=>go('Colaboradores')}><Users/>Colaboradores</button></div></section></>
 }
 

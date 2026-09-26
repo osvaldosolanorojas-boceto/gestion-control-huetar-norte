@@ -61,3 +61,8 @@
 @media(max-width:650px){.balance-item{align-items:flex-start;flex-direction:column}}
 .modalactions .danger-action{margin-right:auto;color:#a51c30;border:1px solid #e6b2b8;background:#fff5f5}
 .modalactions .danger-action:hover{background:#ffe4e6}
+.order-needs-scroll{overflow-x:auto}
+.order-needs table{width:100%;border-collapse:collapse;min-width:680px}
+.order-needs th,.order-needs td{padding:10px;text-align:left;border-bottom:1px solid #e5e7eb}
+.order-needs th{font-size:.8rem;color:#526070}
+.order-needs .sale-help{margin-top:14px}
