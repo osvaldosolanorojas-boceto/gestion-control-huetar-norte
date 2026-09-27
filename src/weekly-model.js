@@ -32,9 +32,10 @@ export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[
   for(const row of freights)totals.CRC.freight+=Number(row.monto||0)
   for(const row of purchasePayroll)totals.CRC.costs+=Number(row.monto||0)
   for(const row of locals){const currency=row.moneda;if(totals[currency])totals[currency].local+=(row.ventas_segundas||[]).reduce((sum,x)=>sum+Number(x.subtotal||0),0)}
-  for(const row of costs)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.monto||0)
-  const hasPayrollEstimate=costs.some(row=>row.categoria==='otros'&&/EJERCICIO.*estimado de planilla/i.test(row.concepto||''))
-  if(!hasPayrollEstimate)for(const row of payroll)totals.CRC.costs+=Number(row.bruto||0)
+  const isExercisePayroll=row=>row.categoria==='otros'&&/EJERCICIO.*estimado de planilla/i.test(row.concepto||'')
+  const processingIncludesPayroll=Number(processingEstimate)>0
+  for(const row of costs)if(totals[row.moneda]&&!(processingIncludesPayroll&&isExercisePayroll(row)))totals[row.moneda].costs+=Number(row.monto||0)
+  if(!processingIncludesPayroll&&!costs.some(isExercisePayroll))for(const row of payroll)totals.CRC.costs+=Number(row.bruto||0)
   for(const row of productionCosts)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.weekAmount||0)
   for(const row of cartonCosts)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.monto||0)
   totals.CRC.costs+=Number(processingEstimate||0)
