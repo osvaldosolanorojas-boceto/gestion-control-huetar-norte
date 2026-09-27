@@ -26,7 +26,7 @@ export function isoWeek(value){
 }
 export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],locals=[],costs=[],notes=[],manual=[],payroll=[],productionCosts=[]}){
   const totals={CRC:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0},USD:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0}}
-  for(const row of sales)if(totals[row.moneda||'USD'])totals[row.moneda||'USD'].export+=Number(row.monto_cxc||0)
+  for(const row of sales){const currency=row.moneda||'USD';if(totals[currency])totals[currency][row.mercado==='Costa Rica'?'local':'export']+=Number(row.monto_cxc||0)}
   for(const row of purchases)totals.CRC.product+=Number(row.monto_cxp||0)
   for(const row of fixedPurchases)totals.CRC.product+=Number(row.monto||0)
   for(const row of freights)totals.CRC.freight+=Number(row.monto||0)
