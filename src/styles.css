@@ -70,3 +70,4 @@
 .order-needs-detail>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;padding:8px;background:#f3f7fb;border-radius:6px}
 
 .brand .company-logo{display:block;width:100%;height:auto;max-height:118px;object-fit:contain;background:white;border-radius:10px;padding:7px}.sidebar nav{overflow-y:auto;min-height:0;align-content:start}.brand{padding-bottom:15px}.brand .close{flex:none}
+.receipt-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center}.receipt-photos a{display:block}.receipt-photos img{object-fit:cover;border-radius:8px;border:1px solid #c8d7e8}.receipt-photos span{font-size:13px;padding:6px;border-radius:8px;background:#eef4fa;max-width:180px;overflow-wrap:anywhere}.receipt-photos button{margin-left:5px}
