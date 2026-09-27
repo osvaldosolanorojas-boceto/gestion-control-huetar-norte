@@ -24,7 +24,7 @@ export function isoWeek(value){
   first.setUTCDate(first.getUTCDate()-(first.getUTCDay()+6)%7+3)
   return {year:thursday.getUTCFullYear(),week:1+Math.round((thursday-first)/604800000)}
 }
-export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],locals=[],costs=[],notes=[],manual=[],payroll=[]}){
+export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],locals=[],costs=[],notes=[],manual=[],payroll=[],productionCosts=[]}){
   const totals={CRC:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0},USD:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0}}
   for(const row of sales)if(totals[row.moneda||'USD'])totals[row.moneda||'USD'].export+=Number(row.monto_cxc||0)
   for(const row of purchases)totals.CRC.product+=Number(row.monto_cxp||0)
@@ -33,6 +33,7 @@ export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[
   for(const row of locals){const currency=row.moneda;if(totals[currency])totals[currency].local+=(row.ventas_segundas||[]).reduce((sum,x)=>sum+Number(x.subtotal||0),0)}
   for(const row of costs)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.monto||0)
   for(const row of payroll)totals.CRC.costs+=Number(row.bruto||0)
+  for(const row of productionCosts)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.weekAmount||0)
   for(const row of notes){const currency=row.ordenes_venta?.moneda||'USD';if(totals[currency])totals[currency].credits+=Number(row.monto||0)}
   for(const row of manual)if(totals[row.moneda])totals[row.moneda][row.tipo==='cobrar'?'manualIncome':'costs']+=Number(row.monto||0)
   return totals
