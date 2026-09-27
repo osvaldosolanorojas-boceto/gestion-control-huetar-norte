@@ -2,95 +2,62 @@ import React,{useEffect,useState} from 'react'
 import {Plus,X} from 'lucide-react'
 import {supabase} from './supabase'
 import {addDays,costaRicaToday,isoWeek,sundayOf} from './weekly-model'
+import {periodShare} from './cost-model'
+import LegacyPayroll from './plant-payroll-legacy'
 
-const colones=n=>new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:2}).format(Number(n)||0)
-const blank=()=>({trabajador_id:'',modalidad:'Fijo semanal',salario_semanal:'',horas_ordinarias:'',tarifa_hora:'',horas_extra:'',tarifa_extra:'',adicionales:'',deducciones:'',observaciones:''})
-const amount=v=>v===''?0:Number(v)
-const calculated=f=>{
-  const base=f.modalidad==='Fijo semanal'?amount(f.salario_semanal):amount(f.horas_ordinarias)*amount(f.tarifa_hora)
-  const bruto=Math.round((base+amount(f.horas_extra)*amount(f.tarifa_extra)+amount(f.adicionales))*100)/100
-  return {bruto,neto:Math.round((bruto-amount(f.deducciones))*100)/100}
-}
-
+const money=n=>new Intl.NumberFormat('es-CR',{style:'currency',currency:'CRC',maximumFractionDigits:2}).format(Number(n)||0)
+const n=v=>Number(v||0)
+const localDate=v=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Costa_Rica',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(' ','T')
+const rateBlank=(worker,day)=>({trabajador_id:worker?.id||'',vigente_desde:day,tipo:worker?.modalidad_pago==='Salario fijo'?'Fijo mensual':'Por horas',monto:'',tarifa_nocturna:'',tarifa_mixta:'',factor_extra:'1.5',factor_feriado:'2',factor_extra_feriado:'3',notas:''})
+const shiftBlank=(worker,day)=>({trabajador_id:worker?.id||'',entrada:`${day}T07:00`,salida:`${day}T16:00`,descanso_minutos:'60',horas_extra:'0',feriado:false,cuadrilla:'Diurna',observaciones:''})
+const payBlank=(worker,condition,week)=>{const monthly=condition?.tipo==='Fijo mensual',start=monthly?`${week.slice(0,7)}-01`:week,finish=monthly?addDays(start,new Date(Number(start.slice(0,4)),Number(start.slice(5,7)),0).getDate()-1):addDays(week,6);return {trabajador_id:worker.id,condicion_id:condition.id,periodo_inicio:start,periodo_fin:finish,puesto:worker.puesto||'',bruto:String(condition.monto),rebajo_ccss:'0',otros_rebajos:'0',cuota_patronal_ccss:'0',observaciones:''}}
+const timeHours=f=>{const start=new Date(`${f.entrada}:00-06:00`),end=new Date(`${f.salida}:00-06:00`);return Math.max(0,Math.round(((end-start)/3600000-n(f.descanso_minutos)/60)*100)/100)}
 export default function PlantPayroll({go}){
-  const [weekStart,setWeekStart]=useState(()=>sundayOf(costaRicaToday()))
-  const [workers,setWorkers]=useState([]),[rows,setRows]=useState([]),[history,setHistory]=useState([])
-  const [editing,setEditing]=useState(null),[form,setForm]=useState(blank),[error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false)
-  const end=addDays(weekStart,6),label=isoWeek(addDays(weekStart,1))
-  const reload=async()=>{
-    setLoading(true);setError('')
-    const [people,payroll,past]=await Promise.all([
-      supabase.from('trabajadores').select('id,nombre,categoria,activo,modalidad_pago').order('nombre').limit(1000),
-      supabase.from('planillas_planta').select('*').eq('semana_inicio',weekStart).is('anulado_en',null).order('creado_en').limit(1000),
-      supabase.from('planillas_planta').select('trabajador_id,modalidad,salario_semanal,horas_ordinarias,tarifa_hora,tarifa_extra').lt('semana_inicio',weekStart).is('anulado_en',null).order('semana_inicio',{ascending:false}).limit(1000)
-    ])
-    setLoading(false)
-    const failure=people.error||payroll.error||past.error
-    if(failure){setError(`No se pudo cargar la planilla: ${failure.message}`);return}
-    setWorkers(people.data||[]);setRows(payroll.data||[]);setHistory(past.data||[])
-  }
-  useEffect(()=>{reload()},[weekStart])
-  const open=row=>{setError('');setEditing(row?.id||'new');setForm(row?Object.fromEntries(Object.keys(blank()).map(key=>[key,String(row[key]??'')])):blank())}
-  const chooseWorker=id=>{
-    const previous=history.find(row=>row.trabajador_id===id)
-    const worker=workers.find(row=>row.id===id)
-    setForm(current=>({...current,...blank(),trabajador_id:id,modalidad:worker?.modalidad_pago==='Salario fijo'?'Fijo semanal':'Por horas',...(previous?{
-      modalidad:previous.modalidad,salario_semanal:previous.modalidad==='Fijo semanal'?String(previous.salario_semanal):'',
-      horas_ordinarias:previous.modalidad==='Por horas'?String(previous.horas_ordinarias):'',
-      tarifa_hora:previous.modalidad==='Por horas'?String(previous.tarifa_hora):'',
-      tarifa_extra:Number(previous.tarifa_extra)>0?String(previous.tarifa_extra):''
-    }:{})}))
-  }
+  const [week,setWeek]=useState(()=>sundayOf(costaRicaToday())),end=addDays(week,6),label=isoWeek(addDays(week,1))
+  const [workers,setWorkers]=useState([]),[conditions,setConditions]=useState([]),[shifts,setShifts]=useState([]),[fixed,setFixed]=useState([]),[legacy,setLegacy]=useState(false)
+  const [kind,setKind]=useState(''),[form,setForm]=useState({}),[editing,setEditing]=useState(null),[error,setError]=useState(''),[saving,setSaving]=useState(false),[loading,setLoading]=useState(true)
+  const reload=async()=>{setLoading(true);setError('');const monthStart=`${week.slice(0,7)}-01`;const [a,b,c,d]=await Promise.all([
+    supabase.from('trabajadores').select('id,nombre,categoria,puesto,activo,modalidad_pago').order('nombre').limit(1000),
+    supabase.from('condiciones_salariales').select('*').lte('vigente_desde',end).order('vigente_desde',{ascending:false}).limit(2000),
+    supabase.from('jornadas_trabajo').select('*').gte('fecha_labor',week).lte('fecha_labor',end).order('entrada',{ascending:false}).limit(2000),
+    supabase.from('planillas_fijas').select('*').lte('periodo_inicio',end).gte('periodo_fin',week).order('periodo_inicio',{ascending:false}).limit(1000)])
+    setLoading(false);const fail=[a,b,c,d].find(x=>x.error);if(fail){setError(fail.error.message);return}if(a.data.length===1000||b.data.length===2000||c.data.length===2000||d.data.length===1000){setError('Hay más registros que el límite de consulta; los totales no se muestran incompletos.');return}
+    setWorkers(a.data);setConditions(b.data);setShifts(c.data);setFixed(d.data)}
+  useEffect(()=>{reload()},[week])
+  const current=(worker,day=end)=>conditions.filter(x=>x.trabajador_id===worker.id&&x.vigente_desde<=day).sort((a,b)=>b.vigente_desde.localeCompare(a.vigente_desde))[0]
+  const startRate=worker=>{setKind('rate');setEditing(null);setForm(rateBlank(worker,week));setError('')}
+  const startShift=(worker,row)=>{setKind('shift');setEditing(row?.id||null);setForm(row?{trabajador_id:row.trabajador_id,entrada:localDate(row.entrada),salida:localDate(row.salida),descanso_minutos:String(row.descanso_minutos),horas_extra:String(row.horas_extra),feriado:row.feriado,cuadrilla:row.cuadrilla,observaciones:row.observaciones||''}:shiftBlank(worker,week));setError('')}
+  const startPay=worker=>{const c=current(worker,week);if(!c||c.tipo==='Por horas'){startRate(worker);return}setKind('pay');setEditing(null);setForm(payBlank(worker,c,week));setError('')}
   const save=async()=>{
-    if(!form.trabajador_id){setError('Seleccione un colaborador.');return}
-    if(rows.some(row=>row.trabajador_id===form.trabajador_id&&row.id!==editing)){setError('Este colaborador ya tiene una planilla en la semana. Edite ese registro.');return}
-    const numeric=['salario_semanal','horas_ordinarias','tarifa_hora','horas_extra','tarifa_extra','adicionales','deducciones']
-    if(numeric.some(key=>!Number.isFinite(amount(form[key]))||amount(form[key])<0||Math.abs(Math.round(amount(form[key])*100)-amount(form[key])*100)>0.000001)){setError('Revise los importes y horas; use números positivos con hasta dos decimales.');return}
-    if(form.modalidad==='Fijo semanal'&&!(amount(form.salario_semanal)>0)||form.modalidad==='Por horas'&&(!(amount(form.horas_ordinarias)>0)||!(amount(form.tarifa_hora)>0))){setError('Indique el salario semanal o las horas y tarifa ordinaria.');return}
-    if((amount(form.horas_extra)>0)!==(amount(form.tarifa_extra)>0)){setError('Para las horas extra indique cantidad y tarifa; deje ambos en cero si no hubo extras.');return}
-    const {neto}=calculated(form)
-    if(neto<0){setError('Las deducciones no pueden superar el salario bruto.');return}
-    const payload={semana_inicio:weekStart,trabajador_id:form.trabajador_id,modalidad:form.modalidad,
-      salario_semanal:form.modalidad==='Fijo semanal'?amount(form.salario_semanal):0,
-      horas_ordinarias:form.modalidad==='Por horas'?amount(form.horas_ordinarias):0,
-      tarifa_hora:form.modalidad==='Por horas'?amount(form.tarifa_hora):0,
-      horas_extra:amount(form.horas_extra),tarifa_extra:amount(form.tarifa_extra),
-      adicionales:amount(form.adicionales),deducciones:amount(form.deducciones),
-      observaciones:form.observaciones.trim()||null}
-    setSaving(true);setError('')
-    const result=editing==='new'
-      ?await supabase.from('planillas_planta').insert(payload).select('id').single()
-      :await supabase.from('planillas_planta').update(payload).eq('id',editing).select('id').single()
-    setSaving(false)
-    if(result.error){setError(`No se pudo guardar la planilla: ${result.error.message}`);return}
-    setEditing(null);reload()
+    setSaving(true);setError('');let result
+    if(kind==='rate'){
+      const amount=n(form.monto);if(!form.trabajador_id||!form.vigente_desde||amount<=0||form.tipo==='Por horas'&&[form.tarifa_nocturna,form.tarifa_mixta].some(x=>x!==''&&n(x)<=0)){setSaving(false);setError('Indique colaborador, vigencia y monto válido.');return}
+      result=await supabase.from('condiciones_salariales').insert({trabajador_id:form.trabajador_id,vigente_desde:form.vigente_desde,tipo:form.tipo,monto:amount,tarifa_nocturna:form.tipo==='Por horas'&&form.tarifa_nocturna!==''?n(form.tarifa_nocturna):null,tarifa_mixta:form.tipo==='Por horas'&&form.tarifa_mixta!==''?n(form.tarifa_mixta):null,factor_extra:n(form.factor_extra),factor_feriado:n(form.factor_feriado),factor_extra_feriado:n(form.factor_extra_feriado),notas:form.notas.trim()||null})
+    }else if(kind==='shift'){
+      const hours=timeHours(form);if(!form.trabajador_id||!form.entrada||!form.salida||hours<=0||hours>24||n(form.horas_extra)>hours){setSaving(false);setError('Revise entrada, salida, descanso y extras.');return}
+      result=await supabase.rpc('guardar_jornada_trabajo',{p_trabajador_id:form.trabajador_id,p_entrada:new Date(`${form.entrada}:00-06:00`).toISOString(),p_salida:new Date(`${form.salida}:00-06:00`).toISOString(),p_descanso_minutos:n(form.descanso_minutos),p_horas_extra:n(form.horas_extra),p_feriado:form.feriado,p_cuadrilla:form.cuadrilla,p_observaciones:form.observaciones.trim()||null,p_id:editing})
+    }else{
+      const gross=n(form.bruto),deduct=n(form.rebajo_ccss)+n(form.otros_rebajos);if(gross<=0||deduct>gross||[form.rebajo_ccss,form.otros_rebajos,form.cuota_patronal_ccss].some(x=>n(x)<0)||!form.periodo_inicio||form.periodo_fin<form.periodo_inicio){setSaving(false);setError('Revise bruto, rebajos, Caja patronal y período.');return}
+      const payload={...form,bruto:gross,rebajo_ccss:n(form.rebajo_ccss),otros_rebajos:n(form.otros_rebajos),cuota_patronal_ccss:n(form.cuota_patronal_ccss),observaciones:form.observaciones.trim()||null}
+      result=editing?await supabase.from('planillas_fijas').update(payload).eq('id',editing):await supabase.from('planillas_fijas').insert(payload)
+    }
+    setSaving(false);if(result.error){setError(result.error.message);return}setKind('');reload()
   }
-  const voidRow=async row=>{
-    if(!window.confirm(`¿Anular la planilla de ${workers.find(w=>w.id===row.trabajador_id)?.nombre||'este colaborador'} de la semana ${label.week}? El registro queda para auditoría.`))return
-    setError('')
-    const {error:failure}=await supabase.from('planillas_planta').update({anulado_en:new Date().toISOString()}).eq('id',row.id).select('id').single()
-    if(failure){setError(`No se pudo anular: ${failure.message}`);return}
-    reload()
-  }
-  const gross=rows.reduce((sum,row)=>sum+Number(row.bruto),0),net=rows.reduce((sum,row)=>sum+Number(row.neto),0)
-  const preview=calculated(form)
-  return <>
-    <div className="modulebar"><div><p>Registre una planilla por colaborador y semana. Incluye personal operativo, encargados y administrativos de planta.</p></div><button className="primary" onClick={()=>open()}><Plus size={18}/>Agregar colaborador</button></div>
-    <div className="weekly-nav"><button onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Semana anterior</button><label>Semana {label.week} · {label.year}<input type="date" value={weekStart} onChange={e=>e.target.value&&setWeekStart(sundayOf(e.target.value))}/></label><span>Del {weekStart} al {end}</span><button onClick={()=>setWeekStart(addDays(weekStart,7))}>Semana siguiente →</button></div>
-    {error&&!editing&&<div className="formerror" role="alert">{error}</div>}
-    <div className="bank-note">El salario bruto se suma al gasto del corte semanal. Las deducciones cambian el neto del colaborador, sin rebajar el costo de planta. Registre aquí esta planilla para evitar duplicarla como costo manual.</div>
-    <div className="weekly-grid"><article><small>Planilla de planta · CRC</small><div><span>Colaboradores</span><b>{rows.length}</b></div><div><span>Costo bruto de la semana</span><b>{colones(gross)}</b></div><div><span>Deducciones</span><b>{colones(gross-net)}</b></div><div className="weekly-result"><span>Neto calculado</span><strong>{colones(net)}</strong></div></article></div>
-    {loading?<div className="empty">Cargando planilla…</div>:<div className="workers-panel"><h3>Detalle por colaborador</h3>{rows.map(row=>{const worker=workers.find(w=>w.id===row.trabajador_id);return <article key={row.id}><div><b>{worker?.nombre||'Colaborador'} · {worker?.categoria||'Operativo'}</b><span>{row.modalidad}{row.modalidad==='Por horas'?` · ${row.horas_ordinarias} horas × ${colones(row.tarifa_hora)}`:''}{Number(row.horas_extra)>0?` · ${row.horas_extra} extras × ${colones(row.tarifa_extra)}`:''} · Bruto {colones(row.bruto)} · Deducciones {colones(row.deducciones)}</span>{row.observaciones&&<small>{row.observaciones}</small>}</div><strong>{colones(row.neto)} neto</strong><button onClick={()=>open(row)}>Editar</button><button onClick={()=>voidRow(row)}>Anular</button></article>})}{!rows.length&&<p>Aún no hay planilla registrada para esta semana.</p>}</div>}
-    <button type="button" onClick={()=>go('Colaboradores')}>Administrar fichas de colaboradores</button>
-    {editing&&<div className="modalwrap"><div className="modal plant-form weekly-modal"><div className="modalhead"><div><span>PLANILLA DE PLANTA · SEMANA {label.week}</span><h2>{editing==='new'?'Agregar colaborador':'Editar planilla'}</h2></div><button onClick={()=>setEditing(null)} aria-label="Cerrar"><X/></button></div>
-      <div className="formgrid"><label className="wide">Colaborador *<select value={form.trabajador_id} onChange={e=>chooseWorker(e.target.value)}><option value="">Seleccione un colaborador</option>{workers.filter(w=>w.activo||w.id===form.trabajador_id).map(w=><option key={w.id} value={w.id}>{w.nombre} · {w.categoria||'Operativo'}</option>)}</select></label>
-        <label>Forma de cálculo<select value={form.modalidad} onChange={e=>setForm(current=>({...current,modalidad:e.target.value,salario_semanal:'',horas_ordinarias:'',tarifa_hora:''}))}><option>Fijo semanal</option><option>Por horas</option></select></label>
-        {form.modalidad==='Fijo semanal'?<label>Salario fijo de esta semana (₡) *<input type="number" min="0" step="0.01" value={form.salario_semanal} onChange={e=>setForm({...form,salario_semanal:e.target.value})}/></label>:<><label>Horas ordinarias *<input type="number" min="0" step="0.01" value={form.horas_ordinarias} onChange={e=>setForm({...form,horas_ordinarias:e.target.value})}/></label><label>Tarifa por hora (₡) *<input type="number" min="0" step="0.01" value={form.tarifa_hora} onChange={e=>setForm({...form,tarifa_hora:e.target.value})}/></label></>}
-        <label>Horas extra<input type="number" min="0" step="0.01" value={form.horas_extra} onChange={e=>setForm({...form,horas_extra:e.target.value})}/></label><label>Tarifa de hora extra (₡)<input type="number" min="0" step="0.01" value={form.tarifa_extra} onChange={e=>setForm({...form,tarifa_extra:e.target.value})}/></label>
-        <label>Adicionales (₡)<input type="number" min="0" step="0.01" value={form.adicionales} onChange={e=>setForm({...form,adicionales:e.target.value})}/></label><label>Deducciones (₡)<input type="number" min="0" step="0.01" value={form.deducciones} onChange={e=>setForm({...form,deducciones:e.target.value})}/></label>
-        <label className="wide">Observaciones<input value={form.observaciones} onChange={e=>setForm({...form,observaciones:e.target.value})}/></label>
-      </div><div className="receipt-calculation">Costo bruto: <b>{colones(preview.bruto)}</b> · Neto calculado: <b>{colones(preview.neto)}</b></div>
-      {error&&<div className="formerror" role="alert">{error}</div>}<div className="modalactions"><button onClick={()=>setEditing(null)} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar planilla'}</button></div>
-    </div></div>}
+  const hourlyCost=shifts.reduce((v,x)=>v+n(x.costo_bruto),0),fixedCost=fixed.reduce((v,x)=>v+periodShare({periodo_inicio:x.periodo_inicio,periodo_fin:x.periodo_fin,monto:x.costo_total},week,end),0)
+  return <><div className="modulebar"><div><p>Jornadas y salarios por colaborador. Entrada y salida se anotan por día; las tarifas y salarios conservan su fecha de vigencia.</p></div><div className="cost-buttons"><button className="primary" onClick={()=>{setKind('shift');setEditing(null);setForm(shiftBlank(null,week));setError('')}}><Plus size={17}/>Anotar jornada</button><button onClick={()=>{setKind('rate');setEditing(null);setForm(rateBlank(null,week));setError('')}}>Registrar tarifa o salario</button></div></div>
+    <div className="weekly-nav"><button onClick={()=>setWeek(addDays(week,-7))}>← Semana anterior</button><label>Semana {label.week} · {label.year}<input type="date" value={week} onChange={e=>e.target.value&&setWeek(sundayOf(e.target.value))}/></label><span>Del {week} al {end}</span><button onClick={()=>setWeek(addDays(week,7))}>Semana siguiente →</button></div>
+    {error&&!kind&&<div className="formerror" role="alert">{error}</div>}
+    <div className="bank-note">Configure el monto pactado con cada persona. Las tarifas diurna, mixta y nocturna son editables; los recargos de extras y feriados se guardan con vigencia. La cuadrilla identifica el equipo, mientras el tipo de jornada se calcula por horario. La cuota de la Caja del trabajador reduce el neto; la patronal aumenta el costo.</div>
+    {loading?<div className="empty">Cargando planilla…</div>:<>
+      <div className="weekly-grid"><article><small>Planilla calculada · CRC</small><div><span>Jornadas anotadas</span><b>{shifts.length}</b></div><div><span>Horas pagadas</span><b>{shifts.reduce((v,x)=>v+n(x.horas_ordinarias)+n(x.horas_extra),0).toFixed(2)}</b></div><div><span>Trabajo por horas</span><b>{money(hourlyCost)}</b></div><div><span>Salarios fijos y Caja patronal · porción semanal</span><b>{money(fixedCost)}</b></div></article></div>
+      <section className="panel tablepanel"><h3>Colaboradores y condiciones vigentes</h3><div className="supply-operations-table"><table><thead><tr><th>Colaborador / puesto</th><th>Modalidad</th><th>Hora diurna / salario</th><th>Mixta / nocturna</th><th>Vigencia</th><th>Registrar</th></tr></thead><tbody>{workers.filter(w=>w.activo).map(w=>{const c=current(w);return <tr key={w.id}><td><b>{w.nombre}</b><small>{w.puesto||'Puesto pendiente'} · {w.categoria}</small></td><td>{c?.tipo||'Sin tarifa'}</td><td>{c?money(c.monto):'Pendiente'}</td><td>{c?.tipo==='Por horas'?`${c.tarifa_mixta?money(c.tarifa_mixta):'sin tarifa mixta'} / ${c.tarifa_nocturna?money(c.tarifa_nocturna):'sin tarifa nocturna'}`:'—'}</td><td>{c?.vigente_desde||'—'}</td><td><button onClick={()=>startRate(w)}>Cambiar tarifa</button>{c&&<button onClick={()=>startShift(w)}>Jornada</button>}{c&&c.tipo!=='Por horas'&&<button onClick={()=>startPay(w)}>Salario fijo</button>}</td></tr>})}</tbody></table></div></section>
+      <section className="panel tablepanel"><h3>Entradas y salidas de esta semana</h3><div className="supply-operations-table"><table><thead><tr><th>Fecha / colaborador</th><th>Entrada</th><th>Salida</th><th>Cuadrilla / jornada</th><th>Ordinarias</th><th>Extras</th><th>Feriado</th><th>Tarifa aplicada</th><th>Bruto</th><th></th></tr></thead><tbody>{shifts.map(x=><tr key={x.id}><td>{x.fecha_labor}<small>{workers.find(w=>w.id===x.trabajador_id)?.nombre||'Colaborador'}</small></td><td>{localDate(x.entrada).slice(11)}</td><td>{localDate(x.salida).slice(11)}</td><td>{x.cuadrilla} / {x.tipo_jornada}</td><td>{x.horas_ordinarias}</td><td>{x.horas_extra}</td><td>{x.feriado?'Sí':'No'}</td><td>{x.tarifa_hora?money(x.tarifa_hora):'Salario fijo'}</td><td>{x.tipo_pago==='Por horas'?money(x.costo_bruto):'Incluido en salario fijo'}</td><td><button onClick={()=>startShift(workers.find(w=>w.id===x.trabajador_id),x)}>Editar</button></td></tr>)}</tbody></table></div>{!shifts.length&&<p>Sin jornadas anotadas en esta semana.</p>}</section>
+      <section className="panel tablepanel"><h3>Salarios fijos y rebajos</h3><div className="supply-operations-table"><table><thead><tr><th>Persona / puesto</th><th>Período</th><th>Bruto</th><th>CCSS trabajador</th><th>Otros rebajos</th><th>Neto a pagar</th><th>CCSS patronal</th><th>Costo total</th><th></th></tr></thead><tbody>{fixed.map(x=><tr key={x.id}><td>{workers.find(w=>w.id===x.trabajador_id)?.nombre||'Colaborador'}<small>{x.puesto||'Puesto pendiente'}</small></td><td>{x.periodo_inicio} al {x.periodo_fin}</td><td>{money(x.bruto)}</td><td>{money(x.rebajo_ccss)}</td><td>{money(x.otros_rebajos)}</td><td>{money(x.neto)}</td><td>{money(x.cuota_patronal_ccss)}</td><td>{money(x.costo_total)}</td><td><button onClick={()=>{setKind('pay');setEditing(x.id);setForm(Object.fromEntries(Object.keys(payBlank({id:x.trabajador_id,puesto:x.puesto},{id:x.condicion_id,monto:x.bruto,tipo:'Fijo mensual'},week)).map(k=>[k,String(x[k]??'')])));setError('')}}>Editar</button></td></tr>)}</tbody></table></div>{!fixed.length&&<p>Registre el salario fijo del período desde la fila del colaborador. Los importes reales aún están pendientes.</p>}</section>
+      <button onClick={()=>go('Colaboradores')}>Abrir fichas: puesto y datos del colaborador</button> <button onClick={()=>setLegacy(v=>!v)}>{legacy?'Ocultar':'Ver'} planilla semanal anterior</button>{legacy&&<LegacyPayroll go={go}/>}
+    </>}
+    {kind&&<div className="modalwrap"><div className="modal plant-form weekly-modal"><div className="modalhead"><div><span>PLANILLA · {kind==='rate'?'CONDICIÓN SALARIAL':kind==='shift'?'MARCACIÓN':'SALARIO FIJO'}</span><h2>{kind==='rate'?'Tarifa o salario vigente':kind==='shift'?'Entrada y salida':'Bruto, rebajos y Caja'}</h2></div><button onClick={()=>setKind('')} aria-label="Cerrar"><X/></button></div><div className="formgrid">
+      {kind!=='pay'&&<label className="wide">Colaborador *<select value={form.trabajador_id} disabled={!!editing} onChange={e=>setForm({...form,trabajador_id:e.target.value})}><option value="">Seleccione</option>{workers.filter(w=>w.activo||w.id===form.trabajador_id).map(w=><option key={w.id} value={w.id}>{w.nombre} · {w.puesto||'Puesto pendiente'}</option>)}</select></label>}
+      {kind==='rate'?<><label>Vigente desde *<input type="date" value={form.vigente_desde} onChange={e=>setForm({...form,vigente_desde:e.target.value})}/></label><label>Forma de pago<select value={form.tipo} onChange={e=>setForm({...form,tipo:e.target.value})}><option>Por horas</option><option>Fijo semanal</option><option>Fijo mensual</option></select></label><label>{form.tipo==='Por horas'?'Costo por hora diurna (₡) *':'Salario bruto pactado del período (₡) *'}<input type="number" min="0.01" step="0.01" value={form.monto} onChange={e=>setForm({...form,monto:e.target.value})}/></label>{form.tipo==='Por horas'&&<><label>Hora mixta (₡)<input type="number" min="0.01" step="0.01" value={form.tarifa_mixta} onChange={e=>setForm({...form,tarifa_mixta:e.target.value})}/></label><label>Hora nocturna (₡)<input type="number" min="0.01" step="0.01" value={form.tarifa_nocturna} onChange={e=>setForm({...form,tarifa_nocturna:e.target.value})}/></label><p className="wide">Si deja mixta o nocturna vacía se aplicará la tarifa diurna. Verifique el monto pactado para cada jornada.</p></>}<label>Factor hora extra<input type="number" min="1" step="0.001" value={form.factor_extra} onChange={e=>setForm({...form,factor_extra:e.target.value})}/></label><label>Factor feriado trabajado<input type="number" min="1" step="0.001" value={form.factor_feriado} onChange={e=>setForm({...form,factor_feriado:e.target.value})}/></label><label>Factor extra en feriado<input type="number" min="1" step="0.001" value={form.factor_extra_feriado} onChange={e=>setForm({...form,factor_extra_feriado:e.target.value})}/></label><label className="wide">Notas<input value={form.notas} onChange={e=>setForm({...form,notas:e.target.value})}/></label><p className="wide">Una nueva fecha crea otra tarifa; las jornadas ya guardadas conservan el monto aplicado.</p></>:kind==='shift'?<><label>Inicio de labor *<input type="datetime-local" value={form.entrada} onChange={e=>setForm({...form,entrada:e.target.value})}/></label><label>Final de labor *<input type="datetime-local" value={form.salida} onChange={e=>setForm({...form,salida:e.target.value})}/></label><label>Descanso sin pago (minutos)<input type="number" min="0" step="1" value={form.descanso_minutos} onChange={e=>setForm({...form,descanso_minutos:e.target.value})}/></label><label>Cuadrilla<select value={form.cuadrilla} onChange={e=>setForm({...form,cuadrilla:e.target.value})}><option>Diurna</option><option>Nocturna</option></select></label><label>Horas extra dentro del horario<input type="number" min="0" step="0.01" value={form.horas_extra} onChange={e=>setForm({...form,horas_extra:e.target.value})}/></label><label className="checklabel"><input type="checkbox" checked={form.feriado} onChange={e=>setForm({...form,feriado:e.target.checked})}/> Feriado trabajado</label><label className="wide">Observaciones<input value={form.observaciones} onChange={e=>setForm({...form,observaciones:e.target.value})}/></label><p className="wide">Horas efectivas: <b>{timeHours(form).toFixed(2)}</b>. El horario determina jornada diurna (05:00–19:00), mixta o nocturna; revise extras y feriados antes de guardar. Esta captura manual conserva espacio para integrar luego marcaciones de reloj.</p></>:<><label>Desde<input type="date" value={form.periodo_inicio} onChange={e=>setForm({...form,periodo_inicio:e.target.value})}/></label><label>Hasta<input type="date" value={form.periodo_fin} onChange={e=>setForm({...form,periodo_fin:e.target.value})}/></label><label className="wide">Puesto<input value={form.puesto} onChange={e=>setForm({...form,puesto:e.target.value})}/></label><label>Salario bruto (₡) *<input type="number" min="0.01" step="0.01" value={form.bruto} onChange={e=>setForm({...form,bruto:e.target.value})}/></label><label>Rebajo CCSS trabajador (₡)<input type="number" min="0" step="0.01" value={form.rebajo_ccss} onChange={e=>setForm({...form,rebajo_ccss:e.target.value})}/></label><label>Otros rebajos (₡)<input type="number" min="0" step="0.01" value={form.otros_rebajos} onChange={e=>setForm({...form,otros_rebajos:e.target.value})}/></label><label>Cuota patronal CCSS (₡)<input type="number" min="0" step="0.01" value={form.cuota_patronal_ccss} onChange={e=>setForm({...form,cuota_patronal_ccss:e.target.value})}/></label><label className="wide">Observaciones<input value={form.observaciones} onChange={e=>setForm({...form,observaciones:e.target.value})}/></label><p className="wide">Neto a entregar: <b>{money(n(form.bruto)-n(form.rebajo_ccss)-n(form.otros_rebajos))}</b> · Costo con cuota patronal: <b>{money(n(form.bruto)+n(form.cuota_patronal_ccss))}</b>. Ingrese los montos de la planilla CCSS correspondiente; el sistema no presupone un porcentaje.</p></>}
+    </div>{error&&<div className="formerror" role="alert">{error}</div>}<div className="modalactions"><button onClick={()=>setKind('')} disabled={saving}>Cancelar</button><button className="primary" onClick={save} disabled={saving}>{saving?'Guardando…':'Guardar'}</button></div></div></div>}
   </>
 }

@@ -31,14 +31,19 @@ export default function WeeklyClose(){
       supabase.from('cxc_operativa').select('origen,origen_id,codigo,fecha,fecha_salida,moneda,monto,aplicado,etapa').lte('fecha',saturday).limit(1000),
       supabase.from('cxp_operativa').select('origen,origen_id,codigo,fecha,moneda,monto,aplicado,etapa').lte('fecha',saturday).limit(1000),
       supabase.from('planillas_planta').select('id,trabajador_id,bruto,neto').eq('semana_inicio',weekStart).is('anulado_en',null).limit(1000),
-      supabase.from('costos_produccion').select('id,categoria,concepto,periodo_inicio,periodo_fin,moneda,monto,producto').lte('periodo_inicio',saturday).gte('periodo_fin',weekStart).is('anulado_en',null).limit(1000)
+      supabase.from('costos_produccion').select('id,categoria,concepto,periodo_inicio,periodo_fin,moneda,monto,producto').lte('periodo_inicio',saturday).gte('periodo_fin',weekStart).is('anulado_en',null).limit(1000),
+      supabase.from('jornadas_trabajo').select('id,trabajador_id,costo_bruto,tipo_pago').gte('fecha_labor',weekStart).lte('fecha_labor',saturday).limit(2000),
+      supabase.from('planillas_fijas').select('id,trabajador_id,periodo_inicio,periodo_fin,costo_total,neto').lte('periodo_inicio',saturday).gte('periodo_fin',weekStart).limit(1000)
     ])
     setLoading(false)
     const failure=results.find(r=>r.error)?.error
     if(failure){setError(`No se pudo cargar el corte: ${failure.message}`);return}
-    if(results[10].data?.length===1000||results[11].data?.length===1000||results[13].data?.length===1000){setError('Hay más registros que el límite de consulta; no se muestran cifras parciales.');return}
+    if(results[10].data?.length===1000||results[11].data?.length===1000||results[13].data?.length===1000||results[14].data?.length===2000||results[15].data?.length===1000){setError('Hay más registros que el límite de consulta; no se muestran cifras parciales.');return}
     setBalances({receivables:results[10].data||[],payables:results[11].data||[]})
-    setRecords({sales:results[0].data||[],purchases:results[1].data||[],locals:results[2].data||[],costs:results[3].data||[],fixedPurchases:results[6].data||[],freights:results[7].data||[],notes:results[8].data||[],manual:results[9].data||[],payroll:results[12].data||[],productionCosts:(results[13].data||[]).map(row=>({...row,weekAmount:periodShare(row,weekStart,saturday)}))})
+    const older=results[12].data||[],legacyIds=new Set(older.map(x=>x.trabajador_id))
+    const hourly=[...new Set((results[14].data||[]).filter(x=>x.tipo_pago==='Por horas'&&!legacyIds.has(x.trabajador_id)).map(x=>x.trabajador_id))].map(id=>{const total=(results[14].data||[]).filter(x=>x.trabajador_id===id).reduce((v,x)=>v+Number(x.costo_bruto||0),0);return {id:`jornadas-${id}`,trabajador_id:id,bruto:total,neto:total}})
+    const fixed=(results[15].data||[]).filter(x=>!legacyIds.has(x.trabajador_id)).map(x=>({id:`fijo-${x.id}`,trabajador_id:x.trabajador_id,bruto:periodShare({periodo_inicio:x.periodo_inicio,periodo_fin:x.periodo_fin,monto:x.costo_total},weekStart,saturday),neto:periodShare({periodo_inicio:x.periodo_inicio,periodo_fin:x.periodo_fin,monto:x.neto},weekStart,saturday)}))
+    setRecords({sales:results[0].data||[],purchases:results[1].data||[],locals:results[2].data||[],costs:results[3].data||[],fixedPurchases:results[6].data||[],freights:results[7].data||[],notes:results[8].data||[],manual:results[9].data||[],payroll:[...older,...hourly,...fixed],productionCosts:(results[13].data||[]).map(row=>({...row,weekAmount:periodShare(row,weekStart,saturday)}))})
     setWorkers(results[4].data||[]);setOrders(results[5].data||[])
   }
   useEffect(()=>{reload()},[weekStart])
