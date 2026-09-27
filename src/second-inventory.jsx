@@ -13,9 +13,9 @@ export default function SecondInventory(){
   const reload=async()=>{
     setLoading(true);setSoldLoaded(false);setError('')
     try{
-      const a=await supabase.from('boleta_rendimientos').select('id,producto,calidad,cajas,kg_resultado,presentacion_kg,codigo_trazabilidad,orden_venta_linea_id,boletas_entrada(codigo,fecha_hora,orden_compra_id)').in('calidad',localQualities).is('orden_venta_linea_id',null).order('creado_en',{ascending:false}).limit(500)
+      const a=await supabase.from('boleta_rendimientos').select('id,producto,calidad,cajas,kg_resultado,presentacion_kg,codigo_trazabilidad,orden_venta_linea_id,boletas_entrada(codigo,fecha_hora,orden_compra_id)').in('calidad',[...localQualities,'Primera']).is('orden_venta_linea_id',null).order('creado_en',{ascending:false}).limit(500)
       if(a.error)throw a.error
-      setLots(a.data||[]);setLoading(false)
+      setLots((a.data||[]).filter(r=>r.calidad!=='Primera'||['Ñampí','Cabeza de ñampí'].includes(r.producto)));setLoading(false)
       const [b,c,d,clientsResult]=await Promise.allSettled([supabase.from('ventas_segundas').select('*').order('creado_en',{ascending:false}).limit(1000),supabase.rpc('ordenes_compra_para_planta',{p_incluir_vinculadas:true}),supabase.from('ventas_locales').select('*').order('creado_en',{ascending:false}).limit(100),supabase.from('clientes').select('id,nombre').eq('activo',true).order('nombre')])
       if(b.status==='fulfilled'&&!b.value.error){setSold(b.value.data||[]);setSoldLoaded(true)}
       if(c.status==='fulfilled'&&!c.value.error)setOrders(Object.fromEntries((c.value.data||[]).map(o=>[o.id,o])))
@@ -51,7 +51,8 @@ export default function SecondInventory(){
   const groups=[
     {title:'Yuca · Gruesa',items:visible.filter(r=>r.producto==='Yuca'&&/(gruesa|grueso)$/.test(r.calidad))},
     {title:'Yuca · Menuda',items:visible.filter(r=>r.producto==='Yuca'&&r.calidad.endsWith('menuda'))},
-    {title:'Otras segundas y rechazos',items:visible.filter(r=>r.producto!=='Yuca'||!/(gruesa|grueso|menuda)$/.test(r.calidad))}
+    {title:'Ñampí y cabeza · Primera para venta local',items:visible.filter(r=>['Ñampí','Cabeza de ñampí'].includes(r.producto)&&r.calidad==='Primera')},
+    {title:'Otras segundas y rechazos',items:visible.filter(r=>r.calidad!=='Primera'&&(r.producto!=='Yuca'||!/(gruesa|grueso|menuda)$/.test(r.calidad)))}
   ]
   const groupBalance=items=>items.reduce((total,r)=>{const pending=remaining(r);return {boxes:total.boxes+(r.cajas>0?pending:0),kg:total.kg+(r.cajas>0?pending*(Number(r.kg_resultado||0)/Number(r.cajas)||Number(r.presentacion_kg)||0):pending)}},{boxes:0,kg:0})
   const renderLot=r=><article className="supply-card" key={r.id}><small>{r.boletas_entrada?.codigo||'Boleta'} · {orders[r.boletas_entrada?.orden_compra_id]?.codigo||'Compra'}</small><h3>{orders[r.boletas_entrada?.orden_compra_id]?.productor_nombre||'Productor pendiente'}</h3><p>{r.producto} · {r.calidad}{r.presentacion_kg?` · ${num(r.presentacion_kg)} kg por caja`:''}</p><strong>{num(remaining(r))} {r.cajas>0?'cajas':'kg'}</strong><p>Producido: {num(r.cajas>0?r.cajas:r.kg_resultado)} {r.cajas>0?'cajas':'kg'}</p><button disabled={!soldLoaded||!remaining(r)} onClick={()=>start(r.id)}>Vender de esta boleta</button><details><summary>Salidas registradas</summary>{sold.filter(s=>s.rendimiento_id===r.id).map(s=><p key={s.id}>{s.fecha} · {s.comprador} · {s.destino||'Mercado nacional'} · {num(r.cajas>0?s.cajas:s.kilos)} {r.cajas>0?'cajas':'kg'}{s.peso_caja_kg?` · ${num(s.peso_caja_kg)} kg/caja`:''}</p>)}</details></article>
