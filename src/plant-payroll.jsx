@@ -45,7 +45,7 @@ export default function PlantPayroll({go}){
     if(!form.trabajador_id){setError('Seleccione un colaborador.');return}
     if(rows.some(row=>row.trabajador_id===form.trabajador_id&&row.id!==editing)){setError('Este colaborador ya tiene una planilla en la semana. Edite ese registro.');return}
     const numeric=['salario_semanal','horas_ordinarias','tarifa_hora','horas_extra','tarifa_extra','adicionales','deducciones']
-    if(numeric.some(key=>!Number.isFinite(amount(form[key]))||amount(form[key])<0||Math.round(amount(form[key])*100)!==amount(form[key])*100)){setError('Revise los importes y horas; use números positivos con hasta dos decimales.');return}
+    if(numeric.some(key=>!Number.isFinite(amount(form[key]))||amount(form[key])<0||Math.abs(Math.round(amount(form[key])*100)-amount(form[key])*100)>0.000001)){setError('Revise los importes y horas; use números positivos con hasta dos decimales.');return}
     if(form.modalidad==='Fijo semanal'&&!(amount(form.salario_semanal)>0)||form.modalidad==='Por horas'&&(!(amount(form.horas_ordinarias)>0)||!(amount(form.tarifa_hora)>0))){setError('Indique el salario semanal o las horas y tarifa ordinaria.');return}
     if((amount(form.horas_extra)>0)!==(amount(form.tarifa_extra)>0)){setError('Para las horas extra indique cantidad y tarifa; deje ambos en cero si no hubo extras.');return}
     const {neto}=calculated(form)
