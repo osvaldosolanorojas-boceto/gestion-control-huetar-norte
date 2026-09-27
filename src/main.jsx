@@ -27,6 +27,7 @@ import Farms from './farms'
 import Companies from './companies'
 import UsersSettings from './users-settings'
 import OrderNeeds from './order-needs'
+import OperationalReview from './operational-review'
 
 
 const navGroups = [
@@ -58,11 +59,19 @@ function weekOf(value){
   return `${year}-${String(week).padStart(2,'0')}`
 }
 
+function ExchangeRate({role}){
+  const [row,setRow]=useState(null),[editing,setEditing]=useState(false),[amount,setAmount]=useState(''),[error,setError]=useState('')
+  const refresh=async()=>{const result=await supabase.from('tipos_cambio').select('fecha,compra,venta').eq('moneda','USD').order('fecha',{ascending:false}).limit(1);if(result.error)setError(result.error.message);else setRow(result.data?.[0]||null)}
+  useEffect(()=>{refresh()},[])
+  const save=async()=>{const n=Number(String(amount).replace(',','.'));if(!Number.isFinite(n)||n<=0){setError('Ingrese una tasa de compra válida.');return}const date=costaRicaToday();const {error:failure}=await supabase.from('tipos_cambio').upsert({fecha:date,moneda:'USD',compra:n,venta:row?.fecha===date?row.venta:null},{onConflict:'fecha,moneda'});if(failure){setError(failure.message);return}setError('');setEditing(false);refresh()}
+  return <div className="exchange"><span>Compra USD · CRC</span>{editing?<><input aria-label="Tipo de cambio de compra" type="number" min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)}/><button type="button" onClick={save}>Guardar</button><button type="button" onClick={()=>setEditing(false)}>Cancelar</button></>:<><b>{row?`₡ ${Number(row.compra).toLocaleString('es-CR',{minimumFractionDigits:2})}`:'₡ 440,00 provisional'}</b><small>{row?`Registrado ${row.fecha}`:'Sin tasa guardada · valor de trabajo'}</small>{['administrador','oficina'].includes(role)&&<button type="button" onClick={()=>{setAmount(String(row?.compra??440));setEditing(true);setError('')}}>Modificar</button>}</>}{error&&<small role="alert">{error}</small>}</div>
+}
+
 
 function App({profile}){
   const allowed=visibleSections[profile.rol]||nav.map(([label])=>label)
-  const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [plantOrderId,setPlantOrderId]=useState(null); const [refresh,setRefresh]=useState(0); const [salesWeek,setSalesWeek]=useState(()=>weekOf(costaRicaToday()))
-  const go=(x)=>{if(!['administrador','oficina'].includes(profile.rol)&&['Control de costos','Órdenes de insumos','Catálogo de insumos'].includes(x))return;setSection(x);setOpen(false);setSearch('')}
+  const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [initialHistory,setInitialHistory]=useState(false); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [plantOrderId,setPlantOrderId]=useState(null); const [refresh,setRefresh]=useState(0); const [salesWeek,setSalesWeek]=useState(()=>weekOf(costaRicaToday()))
+  const go=(x,query='',history=false)=>{if(!['administrador','oficina'].includes(profile.rol)&&['Control de costos','Órdenes de insumos','Catálogo de insumos'].includes(x))return;setSection(x);setOpen(false);setSearch(query);setInitialHistory(history)}
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><img className="company-logo" src={`${import.meta.env.BASE_URL}logo-huetar-norte.jpg`} alt="Raíces y Tubérculos Huetar Norte S.A."/><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
@@ -71,8 +80,8 @@ function App({profile}){
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
-      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><button type="button" className="refresh-app" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set('actualiza',String(Date.now()));window.location.assign(url.href)}} title="Cargar la versión más reciente">Actualizar app</button><div className="exchange"><span>Tipo de cambio</span><b>USD ₡ 493,50</b><small>EUR ₡ 579,20</small></div><div className="avatar">OS</div></div></header>
-      <div className="content">{section==='Configuración'&&profile.rol==='administrador'?<SettingsHome go={go}/>:section==='Usuarios y permisos'&&profile.rol==='administrador'?<UsersSettings profile={profile}/>:!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Saldo de yuca en planta'?<YucaBalance profile={profile}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Registro de asistencia'?<PlantAttendance/>:section==='Planilla de planta'?<PlantPayroll go={go}/>:section==='Control de costos'?<CostControl go={go}/>:section==='Corte semanal'?<WeeklyClose/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory/>:section==='Inventario de insumos'?<SupplyOperations go={go} role={profile.rol}/>:section==='Catálogo de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyInventory go={go}/>:section==='Órdenes de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyPurchases go={go}/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} go={go} search={search} setSearch={setSearch} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
+      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><button type="button" className="refresh-app" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set('actualiza',String(Date.now()));window.location.assign(url.href)}} title="Cargar la versión más reciente">Actualizar app</button>{['administrador','oficina'].includes(profile.rol)&&<ExchangeRate role={profile.rol}/>}<div className="avatar">OS</div></div></header>
+      <div className="content">{section==='Configuración'&&profile.rol==='administrador'?<SettingsHome go={go}/>:section==='Usuarios y permisos'&&profile.rol==='administrador'?<UsersSettings profile={profile}/>:!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Saldo de yuca en planta'?<YucaBalance profile={profile}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Registro de asistencia'?<PlantAttendance/>:section==='Planilla de planta'?<PlantPayroll go={go}/>:section==='Control de costos'?<CostControl go={go}/>:section==='Corte semanal'?<WeeklyClose go={go}/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory role={profile.rol}/>:section==='Inventario de insumos'?<SupplyOperations go={go} role={profile.rol}/>:section==='Catálogo de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyInventory go={go}/>:section==='Órdenes de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyPurchases go={go}/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} go={go} search={search} setSearch={setSearch} initialHistory={initialHistory} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
       ? <SalesOrderModal order={editingClient} selectedWeek={salesWeek} close={()=>{setModal(false);setEditingClient(null)}} onSaved={date=>{if(date)setSalesWeek(weekOf(date));setModal(false);setEditingClient(null);setRefresh(x=>x+1)}}/>
@@ -102,6 +111,7 @@ function Dashboard({go,profile,refresh}){
   {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><div className="stats"><Stat title="Pedidos USD esta semana" value={cash(weeklySales,'USD')} note="Valor previsto de órdenes" icon={CircleDollarSign}/><Stat title="Ventas locales esta semana" value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/><Stat title="Por cobrar USD" value={cash(receivable('USD'),'USD')} note={`${data.receivables.length} ventas y pedidos`} icon={ArrowUpRight}/><Stat title="Por pagar estimado" value={cash(payable)} note="Compras con rendimiento y precio" icon={ArrowDownRight}/></div>
   <div className="grid2"><section className="panel"><div className="panelhead"><div><h3>Operación de planta</h3><p>Datos registrados</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div><div className="plant"><div><b>{plant.count}</b><span>Boletas recibidas</span></div><div><b>{plant.kg.toLocaleString('es-CR')}</b><span>kg estimados de ingreso</span></div></div></section><section className="panel"><div className="panelhead"><div><h3>Por cobrar y bancos</h3><p>Colones y dólares se muestran separados</p></div></div><div className="finance-summary"><article><span>Por cobrar CRC</span><strong>{cash(receivable('CRC'))}</strong></article><article><span>Cuentas bancarias</span><strong>{data.accounts.filter(account=>account.tipo_cuenta==='banco').length}</strong></article></div></section></div></>}
   <OrderNeeds refresh={refresh}/>
+  {['administrador','oficina'].includes(profile.rol)&&<OperationalReview go={go} refresh={refresh}/>}
   <section className="quick"><h3>Accesos rápidos</h3><div><button onClick={()=>go('Órdenes de compra')}><ShoppingCart/>Compras</button><button onClick={()=>go('Cuentas por cobrar')}><ArrowUpRight/>Por cobrar</button><button onClick={()=>go('Cuentas por pagar')}><ArrowDownRight/>Por pagar</button><button onClick={()=>go('Bancos')}><Landmark/>Bancos</button>{['administrador','oficina'].includes(profile.rol)&&<button onClick={()=>go('Control de costos')}><CircleDollarSign/>Costos de planta</button>}</div></section></>
 }
 
@@ -109,7 +119,7 @@ function Dashboard({go,profile,refresh}){
 function Stat({title,value,note,icon:Icon,up,warning}){return <article className={warning?'stat warning':'stat'}><div className="staticon"><Icon size={22}/></div><span>{title}</span><b>{value}</b><small className={up?'positive':''}>{note}</small></article>}
 
 
-function Module({title,role,go,search,setSearch,onNew,onEdit,refresh,salesWeek,setSalesWeek}){
+function Module({title,role,go,search,setSearch,initialHistory,onNew,onEdit,refresh,salesWeek,setSalesWeek}){
   const [items,setItems]=useState([]); const [loading,setLoading]=useState(false); const [error,setError]=useState('')
   const [receiptOrders,setReceiptOrders]=useState({})
   const [salesClients,setSalesClients]=useState({})
@@ -118,9 +128,9 @@ function Module({title,role,go,search,setSearch,onNew,onEdit,refresh,salesWeek,s
   const [retry,setRetry]=useState(0)
   const [history,setHistory]=useState(false);const [voided,setVoided]=useState(false);const [closing,setClosing]=useState(null)
   const [otherWeek,setOtherWeek]=useState(()=>title==='Órdenes de compra'?'all':weekOf(costaRicaToday()))
-  const week=title==='Órdenes de venta'?salesWeek:otherWeek
+  const week=title==='Órdenes de venta'&&search?'all':title==='Órdenes de venta'?salesWeek:otherWeek
   const setWeek=title==='Órdenes de venta'?setSalesWeek:setOtherWeek
-  useEffect(()=>{setOtherWeek(title==='Órdenes de compra'?'all':weekOf(costaRicaToday()));setHistory(false);setVoided(false)},[title])
+  useEffect(()=>{setOtherWeek(initialHistory||search?'all':title==='Órdenes de compra'?'all':weekOf(costaRicaToday()));setHistory(initialHistory);setVoided(false)},[title,initialHistory])
   const table=tableBySection[title]
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
@@ -147,9 +157,15 @@ function Module({title,role,go,search,setSearch,onNew,onEdit,refresh,salesWeek,s
   }
   const finish=async item=>{
     setClosing(item.id);setError('')
-    const [purchase,parts]=await Promise.all([supabase.from('ordenes_compra').select('producto,tipo_compra,precio_en_pie,precio_europa,precio_eeuu,precio_segunda_gruesa,precio_segunda_menuda,precio_rechazo,precio_campo,campo_promedio_caja_kg').eq('id',item.orden_compra_id).single(),supabase.from('boleta_rendimientos').select('calidad,kg_resultado,paga_productor,cajas,kg_manual,presentacion_kg').eq('boleta_id',item.id)])
-    if(purchase.error||parts.error){setClosing(null);setError(`No se pudo revisar la liquidación: ${(purchase.error||parts.error).message}`);return}
+    const [purchase,parts,direct]=await Promise.all([supabase.from('ordenes_compra').select('producto,tipo_compra,precio_en_pie,precio_europa,precio_eeuu,precio_segunda_gruesa,precio_segunda_menuda,precio_rechazo,precio_campo,campo_promedio_caja_kg').eq('id',item.orden_compra_id).single(),supabase.from('boleta_rendimientos').select('calidad,kg_resultado,paga_productor,cajas,kg_manual,presentacion_kg').eq('boleta_id',item.id),supabase.from('ventas_externas_boleta').select('cantidad,unidad,peso_saco_kg').eq('boleta_id',item.id)])
+    if(purchase.error||parts.error||direct.error){setClosing(null);setError(`No se pudo revisar la liquidación: ${(purchase.error||parts.error||direct.error).message}`);return}
     const order=purchase.data
+    const received=Number(item.kg_estimados),classified=(parts.data||[]).reduce((sum,part)=>sum+Number(part.kg_resultado||0),0)+(direct.data||[]).reduce((sum,sale)=>sum+Number(sale.cantidad||0)*(sale.unidad==='Sacos'?Number(sale.peso_saco_kg||0):46),0)
+    if(!Number.isFinite(received)||received<=0){setClosing(null);setError(`Boleta ${item.codigo}: falta el peso estimado de entrada. Edite la boleta antes de finalizar.`);return}
+    if(!parts.data?.length||classified<=0){setClosing(null);setError(`Boleta ${item.codigo}: registre el rendimiento o desperdicio antes de finalizar.`);return}
+    if(classified>received+0.01){setClosing(null);setError(`Boleta ${item.codigo}: la salida clasificada (${classified.toLocaleString('es-CR')} kg) supera la entrada (${received.toLocaleString('es-CR')} kg) por ${(classified-received).toLocaleString('es-CR')} kg. Corrija pesos y partidas.`);return}
+    const pending=received-classified
+    if(pending>Math.max(20,received*0.02)&&!item.observaciones?.trim()){setClosing(null);setError(`Boleta ${item.codigo}: faltan ${pending.toLocaleString('es-CR')} kg por clasificar. Registre desperdicio o explique la diferencia en Observaciones antes de finalizar.`);return}
     if((parts.data||[]).some(part=>part.cajas>0&&part.kg_manual!==null)){setClosing(null);setError('Hay partidas con cajas y kilos manuales a la vez. Edite la boleta y guárdela para calcular el peso total por cajas antes de finalizar.');return}
     const fixedTruck=['Puesto en camión','Producto listo'].includes(order.tipo_compra)||order.tipo_compra==='En campo'&&(order.producto!=='Yuca'||order.campo_promedio_caja_kg!=null)
     let estimate=0
@@ -163,7 +179,7 @@ function Module({title,role,go,search,setSearch,onNew,onEdit,refresh,salesWeek,s
       breakdown.push(`${quality}: ${Number(part.kg_resultado||0).toLocaleString('es-CR')} kg × ${money.format(rate)} por ${order.producto==='Caña de azúcar'?'caja':['Yuca','Ñampí','Cabeza de ñampí','Malanga lila','Malanga blanca','Malanga taro'].includes(order.producto)?'quintal':'kilo'}`)
     }
     setClosing(null)
-    if(!window.confirm(`Boleta ${item.codigo}\n\n${order.tipo_compra==='En pie'?'El precio del lote ya figura una sola vez en cuentas por pagar. Esta boleta se sellará sin crear otro pago. La orden seguirá abierta para nuevas entregas.':fixedTruck?'Compra con pago pactado: la cuenta del productor y el flete figuran por separado desde que se guardó la orden. El rendimiento de planta solo sirve para comparar y no cambia el pago.':`${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.`}\n\n¿Finalizar y sellar esta boleta?`))return
+    if(!window.confirm(`Boleta ${item.codigo}\n\nEntrada ${received.toLocaleString('es-CR')} kg · clasificado ${classified.toLocaleString('es-CR')} kg · diferencia ${pending.toLocaleString('es-CR')} kg.${pending>0.01?`\nExplicación: ${item.observaciones||'Diferencia menor al umbral de revisión'}`:''}\n\n${order.tipo_compra==='En pie'?'El precio del lote ya figura una sola vez en cuentas por pagar. Esta boleta se sellará sin crear otro pago. La orden seguirá abierta para nuevas entregas.':fixedTruck?'Compra con pago pactado: la cuenta del productor y el flete figuran por separado desde que se guardó la orden. El rendimiento de planta solo sirve para comparar y no cambia el pago.':`${breakdown.join('\n')}\n\nCuenta por pagar aproximada: ${money.format(estimate)}.`}\n\n¿Finalizar y sellar esta boleta?`))return
     setClosing(item.id)
     const {data,error:failure}=await supabase.rpc('finalizar_boleta_entrada',{p_boleta_id:item.id})
     setClosing(null)
