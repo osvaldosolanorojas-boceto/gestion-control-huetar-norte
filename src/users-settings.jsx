@@ -4,13 +4,13 @@ import {supabase} from './supabase'
 import './users-settings.css'
 
 const groups=[
-  ['Operación',['Resumen','Órdenes de compra','Boletas de entrada','Producción y rendimientos','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo','Órdenes de venta']],
+  ['Operación',['Resumen','Órdenes de insumos','Órdenes de compra','Boletas de entrada','Registro de asistencia','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo','Órdenes de venta']],
   ['Personas y catálogos',['Proveedores','Clientes','Colaboradores','Empresas','Fincas']],
   ['Administración',['Inventarios','Finanzas','Efectivo','Bancos','Planilla de planta','Control de costos','Corte semanal']]
 ]
 const presets={
-  planta:['Boletas de entrada','Producción y rendimientos','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo'],
-  oficina:['Resumen','Órdenes de compra','Boletas de entrada','Órdenes de venta','Proveedores','Clientes','Finanzas','Bancos','Efectivo','Corte semanal'],
+  planta:['Boletas de entrada','Registro de asistencia','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo'],
+  oficina:['Resumen','Órdenes de compra','Boletas de entrada','Registro de asistencia','Órdenes de venta','Proveedores','Clientes','Finanzas','Bancos','Efectivo','Corte semanal'],
   finca:['Fincas'],bodega:['Inventarios'],chofer:['Mapa de carga']
 }
 const empty={nombre:'',correo:'',area:'planta',modulos:presets.planta,observaciones:''}

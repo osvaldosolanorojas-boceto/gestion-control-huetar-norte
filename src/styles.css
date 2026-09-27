@@ -76,3 +76,6 @@
 .cost-shortcuts{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:12px;margin:14px 0}.cost-shortcuts button{display:flex;flex-direction:column;text-align:left;gap:8px;padding:17px;border:1px solid #d5dfec;border-radius:13px;background:#fff;cursor:pointer}.cost-shortcuts button b{color:#173a68;font-size:16px}.cost-shortcuts button span{color:#60748a;font-size:13px}.supply-purchase-line{border:1px solid #d5dfec;border-radius:12px;padding:15px;margin:12px 0}.supply-order details{margin-top:8px}.supply-order details p{margin:9px 0}.supply-order details button{margin-left:10px}
 
 .supply-operations-table{overflow:auto}.supply-operations-table table{width:100%;border-collapse:collapse;min-width:640px}.supply-operations-table th,.supply-operations-table td{text-align:left;padding:13px;border-bottom:1px solid #e1e8f0}.supply-operations-table td small{display:block;color:#64748b}.supply-operations-table td button{margin:3px 5px 3px 0}
+
+/* Agrupación del menú principal sin duplicar rutas. */
+.nav-group{display:grid;gap:4px}.nav-group-title{display:block;padding:12px 13px 3px;color:#9db9df;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}.sidebar nav .nav-group button{width:100%}
