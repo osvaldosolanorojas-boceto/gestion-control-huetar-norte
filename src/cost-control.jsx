@@ -7,16 +7,17 @@ import {periodShare,sumCost} from './cost-model'
 const products=['Yuca','Ñampí','Cabeza de ñampí','Camote','Caña de azúcar','Jengibre','Cúrcuma','Malanga lila','Malanga blanca','Malanga taro','Papa china','Ñame','Chayote','Ayote']
 const names={gas:'Gas de hornos',electricidad:'Electricidad',agua:'Agua',carton:'Cartón',empaque:'Otros materiales de empaque',tratamiento:'Parafina y cera',limpieza:'Limpieza y cloro',proteccion:'Protección personal',mantenimiento:'Mantenimiento y repuestos',carga:'Carga y descarga',puerto:'Puerto y contenedor',documentacion:'Documentación de exportación',alquiler:'Alquiler',depreciacion:'Equipos y depreciación',otros:'Otro costo'}
 const lossNames={tierra:'Tierra y suciedad',humedad:'Humedad y secado',pelado:'Pelado y recorte',proceso:'Merma de proceso',danio:'Producto dañado',desperdicio:'Desperdicio',otra:'Otra diferencia'}
+const fmtLot=x=>new Intl.NumberFormat('es-CR',{style:'currency',currency:x.moneda,maximumFractionDigits:4}).format(Number(x.precio_por_unidad))
 const money=(n,c)=>new Intl.NumberFormat('es-CR',{style:'currency',currency:c,maximumFractionDigits:2}).format(Number(n)||0)
 const emptyCost=()=>({categoria:'gas',concepto:'',periodo_inicio:costaRicaToday(),periodo_fin:costaRicaToday(),fecha_factura:'',moneda:'CRC',monto:'',cantidad:'',unidad:'',producto:'',linea_proceso:'',orden_venta_id:'',boleta_id:'',referencia:'',observaciones:''})
 const emptyLoss=()=>({boleta_id:'',categoria:'tierra',kilos:'',observaciones:''})
-const emptyStock=()=>({insumo_id:'',cantidad:'',fecha:costaRicaToday(),moneda:'CRC',monto:'',producto:'',linea_proceso:'',boleta_id:'',orden_venta_id:'',referencia:'',observaciones:''})
+const emptyStock=()=>({insumo_id:'',lote_id:'',cantidad:'',fecha:costaRicaToday(),moneda:'CRC',monto:'',producto:'',linea_proceso:'',boleta_id:'',orden_venta_id:'',referencia:'',observaciones:''})
 const numeric=v=>v===''?null:Number(v)
 const validMoney=v=>Number.isFinite(Number(v))&&Number(v)>0&&Math.abs(Math.round(Number(v)*100)-Number(v)*100)<0.000001
 
 export default function CostControl({go}){
   const [week,setWeek]=useState(()=>sundayOf(costaRicaToday())),end=addDays(week,6),label=isoWeek(addDays(week,1))
-  const [costs,setCosts]=useState([]),[losses,setLosses]=useState([]),[receipts,setReceipts]=useState([]),[yields,setYields]=useState([]),[orders,setOrders]=useState([]),[supplies,setSupplies]=useState([])
+  const [costs,setCosts]=useState([]),[losses,setLosses]=useState([]),[receipts,setReceipts]=useState([]),[yields,setYields]=useState([]),[orders,setOrders]=useState([]),[supplies,setSupplies]=useState([]),[lots,setLots]=useState([])
   const [kind,setKind]=useState(''),[editing,setEditing]=useState(null),[cost,setCost]=useState(emptyCost),[loss,setLoss]=useState(emptyLoss),[stock,setStock]=useState(emptyStock)
   const [error,setError]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false)
   const reload=async()=>{
@@ -25,7 +26,8 @@ export default function CostControl({go}){
       supabase.from('costos_produccion').select('*').lte('periodo_inicio',end).gte('periodo_fin',week).is('anulado_en',null).order('periodo_inicio',{ascending:false}).limit(1000),
       supabase.from('boletas_entrada').select('id,codigo,producto,fecha_labor,kg_estimados,linea_proceso').gte('fecha_labor',week).lte('fecha_labor',end).order('fecha_labor',{ascending:false}).limit(1000),
       supabase.from('ordenes_venta').select('id,codigo,contenedor').order('creado_en',{ascending:false}).limit(500),
-      supabase.from('insumos').select('id,nombre,categoria,unidad,existencia,activo').eq('activo',true).order('nombre').limit(1000)
+      supabase.from('insumos').select('id,nombre,categoria,unidad,existencia,activo').eq('activo',true).order('nombre'),
+      supabase.from('lotes_insumos').select('id,insumo_id,disponible,fecha,moneda,precio_por_unidad,referencia').gt('disponible',0).order('fecha').limit(1000).limit(1000)
     ])
     const failure=result.find(r=>r.error)?.error
     if(failure){setLoading(false);setError(`No se pudieron cargar costos: ${failure.message}`);return}
@@ -37,10 +39,12 @@ export default function CostControl({go}){
     setLoading(false)
     if(extra.some(x=>x.error)){setError(`No se pudieron cargar mermas: ${extra.find(x=>x.error).error.message}`);return}
     if(result[0].data.length===1000||r.length===1000||extra[0].data.length===2000||extra[1].data.length===1000){setError('Hay más movimientos que el límite de consulta. No se muestran totales parciales.');return}
-    setCosts(result[0].data);setReceipts(r);setOrders(result[2].data||[]);setSupplies(result[3].data||[]);setYields(extra[0].data);setLosses(extra[1].data)
+    setCosts(result[0].data);setReceipts(r);setOrders(result[2].data||[]);setSupplies(result[3].data||[]);setLots(result[4].data||[]);setYields(extra[0].data);setLosses(extra[1].data)
   }
   useEffect(()=>{reload()},[week])
   const start=k=>{setKind(k);setEditing(null);setError('');setCost(emptyCost());setLoss(emptyLoss());setStock(emptyStock())}
+  const preset=(category,concept,startDate,endDate)=>{start('cost');setCost({...emptyCost(),categoria:category,concepto:concept,periodo_inicio:startDate,periodo_fin:endDate})}
+  const monthStart=`${week.slice(0,7)}-01`,monthEnd=addDays(`${week.slice(0,7)}-01`,new Date(Number(week.slice(0,4)),Number(week.slice(5,7)),0).getDate()-1)
   const editCost=row=>{setKind('cost');setEditing(row.id);setError('');setCost(Object.fromEntries(Object.keys(emptyCost()).map(key=>[key,String(row[key]??'')])))}
   const saveCost=async()=>{
     if(!cost.concepto.trim()||!validMoney(cost.monto)||!cost.periodo_inicio||!cost.periodo_fin||cost.periodo_fin<cost.periodo_inicio||cost.periodo_fin>addDays(cost.periodo_inicio,366)){
@@ -57,11 +61,13 @@ export default function CostControl({go}){
   }
   const saveStock=async()=>{
     const selected=supplies.find(x=>x.id===stock.insumo_id)
-    if(!selected||!stock.fecha||!validMoney(stock.monto)||!Number.isFinite(Number(stock.cantidad))||Number(stock.cantidad)<=0||Math.abs(Math.round(Number(stock.cantidad)*1000)-Number(stock.cantidad)*1000)>0.000001||Number(stock.cantidad)>Number(selected.existencia)){
+    if(!selected||!stock.fecha||!(stock.lote_id||validMoney(stock.monto))||!Number.isFinite(Number(stock.cantidad))||Number(stock.cantidad)<=0||Math.abs(Math.round(Number(stock.cantidad)*1000)-Number(stock.cantidad)*1000)>0.000001||Number(stock.cantidad)>Number(selected.existencia)){
       setError('Seleccione un insumo y complete fecha, cantidad disponible y costo del consumo.');return
     }
+    if(lots.some(x=>x.insumo_id===stock.insumo_id)&&!stock.lote_id){setError('Seleccione el lote recibido para calcular el costo automáticamente.');return}
+    if(stock.lote_id&&Number(stock.cantidad)>Number(lots.find(x=>x.id===stock.lote_id)?.disponible||0)){setError('La cantidad supera la disponibilidad del lote.');return}
     setSaving(true);setError('')
-    const {error:e}=await supabase.rpc('consumir_insumo_costeado',{p_insumo_id:stock.insumo_id,p_cantidad:Number(stock.cantidad),p_fecha:stock.fecha,p_moneda:stock.moneda,p_monto:Number(stock.monto),p_producto:stock.producto||null,p_linea:numeric(stock.linea_proceso),p_boleta_id:stock.boleta_id||null,p_orden_venta_id:stock.orden_venta_id||null,p_referencia:stock.referencia.trim()||null,p_observaciones:stock.observaciones.trim()||null})
+    const {error:e}=stock.lote_id?await supabase.rpc('consumir_lote_insumo',{p_lote_id:stock.lote_id,p_cantidad:Number(stock.cantidad),p_fecha:stock.fecha,p_producto:stock.producto||null,p_linea:numeric(stock.linea_proceso),p_boleta_id:stock.boleta_id||null,p_orden_venta_id:stock.orden_venta_id||null,p_referencia:stock.referencia.trim()||null,p_observaciones:stock.observaciones.trim()||null}):await supabase.rpc('consumir_insumo_costeado',{p_insumo_id:stock.insumo_id,p_cantidad:Number(stock.cantidad),p_fecha:stock.fecha,p_moneda:stock.moneda,p_monto:Number(stock.monto),p_producto:stock.producto||null,p_linea:numeric(stock.linea_proceso),p_boleta_id:stock.boleta_id||null,p_orden_venta_id:stock.orden_venta_id||null,p_referencia:stock.referencia.trim()||null,p_observaciones:stock.observaciones.trim()||null})
     setSaving(false);if(e){setError(e.message);return}setKind('');reload()
   }
   const saveLoss=async()=>{
@@ -88,6 +94,7 @@ export default function CostControl({go}){
   const byProduct=[...new Set(costs.map(x=>x.producto||'Sin producto asignado'))].map(name=>({name,crc:sumCost(costs.filter(x=>(x.producto||'Sin producto asignado')===name),week,end,'CRC'),usd:sumCost(costs.filter(x=>(x.producto||'Sin producto asignado')===name),week,end,'USD')}))
   return <>
     <div className="modulebar"><p>Registre los costos cuando se consumen. Gas y luz pueden cubrir varias semanas; el corte distribuye el monto entre las fechas indicadas.</p><div className="cost-buttons"><button className="primary" onClick={()=>start('cost')}><Plus size={17}/>Registrar costo</button><button onClick={()=>start('stock')}>Consumir insumo con costo</button><button onClick={()=>start('loss')}>Clasificar merma</button></div></div>
+    <div className="cost-shortcuts"><button onClick={()=>preset('gas','Recarga de gas de hornos',week,end)}><b>Gas de la semana</b><span>Registrar monto de recarga · {week} al {end}</span></button><button onClick={()=>preset('electricidad','Electricidad de planta',monthStart,monthEnd)}><b>Luz del mes</b><span>Registrar recibo · {monthStart} al {monthEnd}</span></button><button onClick={()=>preset('agua','Agua de planta',monthStart,monthEnd)}><b>Agua del mes</b><span>Registrar recibo mensual</span></button><button onClick={()=>start('cost')}><b>Otros costos</b><span>Alquiler, mantenimiento, limpieza y más</span></button></div>
     <div className="weekly-nav"><button onClick={()=>setWeek(addDays(week,-7))}>← Semana anterior</button><label>Semana {label.week} · {label.year}<input type="date" value={week} onChange={e=>e.target.value&&setWeek(sundayOf(e.target.value))}/></label><span>Del {week} al {end}</span><button onClick={()=>setWeek(addDays(week,7))}>Semana siguiente →</button></div>
     {error&&!kind&&<div className="formerror" role="alert">{error}</div>}
     {loading?<div className="empty">Cargando costos…</div>:<>
@@ -107,9 +114,9 @@ export default function CostControl({go}){
         <label>Boleta de entrada<select value={cost.boleta_id} onChange={e=>{const receipt=receipts.find(r=>r.id===e.target.value);setCost({...cost,boleta_id:e.target.value,producto:receipt?.producto||cost.producto,linea_proceso:receipt?.linea_proceso?String(receipt.linea_proceso):cost.linea_proceso})}}><option value="">Ninguna / costo general</option>{receipts.map(x=><option key={x.id} value={x.id}>{x.codigo} · {x.producto}</option>)}</select></label><label>Pedido o contenedor<select value={cost.orden_venta_id} onChange={e=>setCost({...cost,orden_venta_id:e.target.value})}><option value="">Ninguno</option>{orders.map(x=><option key={x.id} value={x.id}>{x.codigo} · {x.contenedor||'Sin contenedor'}</option>)}</select></label>
         <label>Fecha de factura<input type="date" value={cost.fecha_factura} onChange={e=>setCost({...cost,fecha_factura:e.target.value})}/></label><label>Referencia / factura<input value={cost.referencia} onChange={e=>setCost({...cost,referencia:e.target.value})}/></label><label className="wide">Observaciones<input value={cost.observaciones} onChange={e=>setCost({...cost,observaciones:e.target.value})}/></label>
       </div>:kind==='stock'?<div className="formgrid">
-        <label className="wide">Insumo *<select value={stock.insumo_id} onChange={e=>setStock({...stock,insumo_id:e.target.value})}><option value="">Seleccione un insumo existente</option>{supplies.map(x=><option key={x.id} value={x.id}>{x.nombre} · {x.existencia} {x.unidad} disponibles</option>)}</select></label>{!supplies.length&&<p className="wide">Todavía no hay insumos registrados. <button type="button" onClick={()=>go('Inventario de insumos')}>Crear insumo en Inventarios</button></p>}
+        <label className="wide">Insumo *<select value={stock.insumo_id} onChange={e=>setStock({...stock,insumo_id:e.target.value,lote_id:'',monto:''})}><option value="">Seleccione un insumo existente</option>{supplies.map(x=><option key={x.id} value={x.id}>{x.nombre} · {x.existencia} {x.unidad} disponibles</option>)}</select></label>{lots.some(x=>x.insumo_id===stock.insumo_id)&&<label className="wide">Lote recibido *<select value={stock.lote_id} onChange={e=>setStock({...stock,lote_id:e.target.value})}><option value="">Seleccione un lote con precio registrado</option>{lots.filter(x=>x.insumo_id===stock.insumo_id).map(x=><option key={x.id} value={x.id}>{x.fecha} · {x.disponible} disponibles · {fmtLot(x)} por unidad{x.referencia?` · ${x.referencia}`:''}</option>)}</select></label>}{!supplies.length&&<p className="wide">Todavía no hay insumos registrados. <button type="button" onClick={()=>go('Inventario de insumos')}>Crear insumo en Inventarios</button></p>}
         <label>Fecha de consumo<input type="date" value={stock.fecha} onChange={e=>setStock({...stock,fecha:e.target.value})}/></label><label>Cantidad consumida *<input type="number" min="0.001" step="0.001" value={stock.cantidad} onChange={e=>setStock({...stock,cantidad:e.target.value})}/></label>
-        <label>Moneda<select value={stock.moneda} onChange={e=>setStock({...stock,moneda:e.target.value})}><option>CRC</option><option>USD</option></select></label><label>Costo total consumido *<input type="number" min="0.01" step="0.01" value={stock.monto} onChange={e=>setStock({...stock,monto:e.target.value})}/></label>
+        <label>Moneda<select disabled={!!stock.lote_id} value={stock.lote_id?lots.find(x=>x.id===stock.lote_id)?.moneda||stock.moneda:stock.moneda} onChange={e=>setStock({...stock,moneda:e.target.value})}><option>CRC</option><option>USD</option></select></label><label>Costo total consumido {stock.lote_id?'(calculado del lote)':'*'}<input type="number" disabled={!!stock.lote_id} min="0.01" step="0.01" value={stock.lote_id?(Number(stock.cantidad||0)*Number(lots.find(x=>x.id===stock.lote_id)?.precio_por_unidad||0)).toFixed(2):stock.monto} onChange={e=>setStock({...stock,monto:e.target.value})}/></label>
         <label>Producto<select value={stock.producto} onChange={e=>setStock({...stock,producto:e.target.value})}><option value="">Costo común</option>{products.map(x=><option key={x}>{x}</option>)}</select></label><label>Línea / horno<select value={stock.linea_proceso} onChange={e=>setStock({...stock,linea_proceso:e.target.value})}><option value="">Toda la planta</option><option value="1">Línea 1</option><option value="2">Línea 2</option></select></label>
         <label>Boleta<select value={stock.boleta_id} onChange={e=>{const receipt=receipts.find(r=>r.id===e.target.value);setStock({...stock,boleta_id:e.target.value,producto:receipt?.producto||stock.producto,linea_proceso:receipt?.linea_proceso?String(receipt.linea_proceso):stock.linea_proceso})}}><option value="">Ninguna</option>{receipts.map(x=><option key={x.id} value={x.id}>{x.codigo}</option>)}</select></label><label>Pedido<select value={stock.orden_venta_id} onChange={e=>setStock({...stock,orden_venta_id:e.target.value})}><option value="">Ninguno</option>{orders.map(x=><option key={x.id} value={x.id}>{x.codigo}</option>)}</select></label>
         <label>Referencia<input value={stock.referencia} onChange={e=>setStock({...stock,referencia:e.target.value})}/></label><label>Observaciones<input value={stock.observaciones} onChange={e=>setStock({...stock,observaciones:e.target.value})}/></label>
