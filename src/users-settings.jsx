@@ -6,7 +6,7 @@ import './users-settings.css'
 const groups=[
   ['Operación',['Resumen','Órdenes de compra','Boletas de entrada','Producción y rendimientos','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo','Órdenes de venta']],
   ['Personas y catálogos',['Proveedores','Clientes','Colaboradores','Empresas','Fincas']],
-  ['Administración',['Inventarios','Finanzas','Efectivo','Bancos','Corte semanal']]
+  ['Administración',['Inventarios','Finanzas','Efectivo','Bancos','Planilla de planta','Corte semanal']]
 ]
 const presets={
   planta:['Boletas de entrada','Producción y rendimientos','Mapa de carga','Saldo de yuca en planta','Segundas y rechazo'],
