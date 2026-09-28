@@ -148,7 +148,7 @@ function Module({title,role,go,search,setSearch,initialHistory,onNew,onEdit,refr
     load();return()=>{active=false}
   },[table,refresh,retry,role])
   const voidPurchase=async item=>{
-    if(!window.confirm(`¿Anular la orden ${item.codigo} de ${item.productor_nombre||'este productor'}?\n\nQuedará en la pestaña Anuladas y no podrá usarse para registrar boletas ni pagos.`))return
+    if(!window.confirm(`¿Anular la orden ${item.codigo} de ${item.productor_nombre||'este productor'}?\n\nQuedará en la pestaña Anuladas y no podrá usarse para registrar boletas ni pagos. Las órdenes con adelantos pagados no se pueden anular.`))return
     setClosing(item.id);setError('')
     const {error:failure}=await supabase.rpc('anular_orden_compra',{p_orden_id:item.id})
     setClosing(null)

@@ -161,7 +161,7 @@ export default function PurchaseOrderModal({order,close,onSaved,onOpenReceipt,us
     setSaving(false);onSaved()
   }
   const remove=async()=>{
-    if(!window.confirm(`¿Anular la compra ${order.codigo}? Quedará en Anuladas y saldrá de la lista activa. Si tiene boletas o pagos asociados, el programa impedirá la anulación.`))return
+    if(!window.confirm(`¿Anular la compra ${order.codigo}? Quedará en Anuladas y saldrá de la lista activa. Si tiene boletas, adelantos pagados o pagos asociados, el programa impedirá la anulación.`))return
     setSaving(true);setError('')
     const {error:failure}=await supabase.rpc('anular_orden_compra',{p_orden_id:order.id})
     setSaving(false);if(failure){setError(`No se pudo anular: ${failure.message}`);return}onSaved()
