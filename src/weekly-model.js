@@ -25,6 +25,9 @@ export function isoWeek(value){
   return {year:thursday.getUTCFullYear(),week:1+Math.round((thursday-first)/604800000)}
 }
 export const isIntegralPlantEstimate=row=>/EJERCICIO.*proceso de planta a/i.test(row.concepto||'')
+export function weeklyResult(totals){
+  return Object.fromEntries(['CRC','USD'].map(currency=>{const t=totals[currency],income=t.export+t.local+t.manualIncome-t.credits,expense=t.product+t.freight+t.costs;return [currency,{income,expense,result:income-expense}]}))
+}
 export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],purchasePayroll=[],locals=[],fieldSales=[],directSales=[],costs=[],notes=[],manual=[],payroll=[],productionCosts=[],cartonCosts=[]}){
   const totals={CRC:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0},USD:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0}}
   const hasIntegralEstimate=productionCosts.some(isIntegralPlantEstimate)
