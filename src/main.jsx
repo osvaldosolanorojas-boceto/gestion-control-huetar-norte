@@ -71,7 +71,22 @@ function ExchangeRate({role}){
 function App({profile}){
   const allowed=visibleSections[profile.rol]||nav.map(([label])=>label)
   const [section,setSection]=useState(allowed[0]||'Sin módulos asignados'); const [open,setOpen]=useState(false); const [search,setSearch]=useState(''); const [initialHistory,setInitialHistory]=useState(false); const [modal,setModal]=useState(false); const [editingClient,setEditingClient]=useState(null); const [plantOrderId,setPlantOrderId]=useState(null); const [refresh,setRefresh]=useState(0); const [salesWeek,setSalesWeek]=useState(()=>weekOf(costaRicaToday()))
+  const [followExercise,setFollowExercise]=useState(()=>profile.rol==='administrador'&&localStorage.getItem('seguir_ejercicio')!=='no')
   const go=(x,query='',history=false)=>{if(!['administrador','oficina'].includes(profile.rol)&&['Control de costos','Órdenes de insumos','Catálogo de insumos'].includes(x))return;setSection(x);setOpen(false);setSearch(query);setInitialHistory(history)}
+  useEffect(()=>{
+    if(!followExercise||profile.rol!=='administrador')return
+    let active=true,revision=null
+    const check=async()=>{
+      if(document.visibilityState!=='visible'||modal)return
+      const {data,error}=await supabase.from('seguimiento_ejercicio').select('modulo,revision').eq('id',1).maybeSingle()
+      if(!active||error||!data||revision===data.revision)return
+      revision=data.revision
+      if(allowed.includes(data.modulo)){setSection(data.modulo);setSearch('');setInitialHistory(false)}
+    }
+    check()
+    const timer=window.setInterval(check,3000)
+    return()=>{active=false;window.clearInterval(timer)}
+  },[followExercise,profile.rol,modal])
   return <div className="app">
     <aside className={open?'sidebar open':'sidebar'}>
       <div className="brand"><img className="company-logo" src={`${import.meta.env.BASE_URL}logo-huetar-norte.jpg`} alt="Raíces y Tubérculos Huetar Norte S.A."/><button className="close" onClick={()=>setOpen(false)}><X/></button></div>
@@ -80,7 +95,7 @@ function App({profile}){
     </aside>
     {open&&<div className="scrim" onClick={()=>setOpen(false)}/>} 
     <main>
-      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight"><button type="button" className="refresh-app" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set('actualiza',String(Date.now()));window.location.assign(url.href)}} title="Cargar la versión más reciente">Actualizar app</button>{['administrador','oficina'].includes(profile.rol)&&<ExchangeRate role={profile.rol}/>}<div className="avatar">OS</div></div></header>
+      <header><button className="menubtn" onClick={()=>setOpen(true)}><Menu/></button><div><span className="eyebrow">RAÍCES Y TUBÉRCULOS HUETAR NORTE S.A.</span><h1>{section}</h1></div><div className="headerRight">{profile.rol==='administrador'&&<button type="button" className="refresh-app" onClick={()=>{localStorage.setItem('seguir_ejercicio',followExercise?'no':'si');setFollowExercise(!followExercise)}}>{followExercise?'Seguir ejercicio: activo':'Seguir ejercicio: pausado'}</button>}<button type="button" className="refresh-app" onClick={()=>{const url=new URL(window.location.href);url.searchParams.set('actualiza',String(Date.now()));window.location.assign(url.href)}} title="Cargar la versión más reciente">Actualizar app</button>{['administrador','oficina'].includes(profile.rol)&&<ExchangeRate role={profile.rol}/>}<div className="avatar">OS</div></div></header>
       <div className="content">{section==='Configuración'&&profile.rol==='administrador'?<SettingsHome go={go}/>:section==='Usuarios y permisos'&&profile.rol==='administrador'?<UsersSettings profile={profile}/>:!allowed.length?<div className="notice">Su usuario todavía no tiene módulos asignados.</div>:section==='Resumen'?<Dashboard go={go} profile={profile} refresh={refresh}/>:section==='Mapa de carga'?<LoadMap go={go}/>:section==='Saldo de yuca en planta'?<YucaBalance profile={profile}/>:section==='Inventarios'?<InventoryHome go={go}/>:section==='Registro de asistencia'?<PlantAttendance/>:section==='Planilla de planta'?<PlantPayroll go={go}/>:section==='Control de costos'?<CostControl go={go}/>:section==='Corte semanal'?<WeeklyClose go={go}/>:section==='Fincas'?<Farms/>:section==='Empresas'?<Companies go={go}/>:['Finanzas','Bancos','Bancos Agro Solano','Efectivo','Efectivo Agro Solano','Cuentas por cobrar','Cuentas por pagar'].includes(section)?<Finance key={section} section={section} go={go}/>:section==='Inventario de cartones'?<CartonInventory role={profile.rol}/>:section==='Inventario de insumos'?<SupplyOperations go={go} role={profile.rol}/>:section==='Catálogo de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyInventory go={go}/>:section==='Órdenes de insumos'&&['administrador','oficina'].includes(profile.rol)?<SupplyPurchases go={go}/>:section==='Cajas plásticas'?<PlasticCrates/>:section==='Segundas y rechazo'?<SecondInventory/>:section==='Colaboradores'?<Workers/>:<Module title={section} role={profile.rol} go={go} search={search} setSearch={setSearch} initialHistory={initialHistory} onNew={()=>{setEditingClient(null);setModal(true)}} onEdit={item=>{setEditingClient(item);setModal(true)}} refresh={refresh} salesWeek={salesWeek} setSalesWeek={setSalesWeek}/>}</div>
     </main>
     {modal&&(section==='Órdenes de venta'
@@ -132,6 +147,11 @@ function Module({title,role,go,search,setSearch,initialHistory,onNew,onEdit,refr
   const setWeek=title==='Órdenes de venta'?setSalesWeek:setOtherWeek
   useEffect(()=>{setOtherWeek(initialHistory||search?'all':title==='Órdenes de compra'?'all':weekOf(costaRicaToday()));setHistory(initialHistory);setVoided(false)},[title,initialHistory])
   const table=tableBySection[title]
+  useEffect(()=>{
+    if(!['Órdenes de compra','Órdenes de venta','Boletas de entrada'].includes(title))return
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')setRetry(value=>value+1)},10000)
+    return()=>window.clearInterval(timer)
+  },[title])
   useEffect(()=>{let active=true;if(!table){setItems([]);return}
     setLoading(true);setError('')
     const load=async()=>{
