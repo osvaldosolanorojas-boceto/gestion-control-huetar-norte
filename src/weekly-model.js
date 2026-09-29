@@ -42,6 +42,6 @@ export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[
   for(const row of productionCosts)if(totals[row.moneda]&&(!hasIntegralEstimate||isIntegralPlantEstimate(row)))totals[row.moneda].costs+=Number(row.weekAmount||0)
   for(const row of cartonCosts)if(totals[row.moneda])totals[row.moneda].costs+=Number(row.monto||0)
   for(const row of notes){const currency=row.ordenes_venta?.moneda||'USD';if(totals[currency])totals[currency].credits+=Number(row.monto||0)}
-  for(const row of manual)if(totals[row.moneda])totals[row.moneda][row.tipo==='cobrar'?'manualIncome':'costs']+=Number(row.monto||0)
+  for(const row of manual)if(totals[row.moneda]&&!row.costo_operativo_id)totals[row.moneda][row.tipo==='cobrar'?'manualIncome':'costs']+=Number(row.monto||0)
   return totals
 }
