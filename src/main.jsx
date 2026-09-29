@@ -31,6 +31,8 @@ import OrderNeeds from './order-needs'
 import {greeting,weekValue,weekRange,financeSummary} from './dashboard-model'
 import BccrRate from './bccr-rate'
 import WeekProfit from './week-profit'
+import EuropeYuca from './europe-yuca'
+import PersonalPlan from './personal-plan'
 import OperationalReview from './operational-review'
 
 
@@ -133,6 +135,7 @@ function App({profile}){
 
 function Dashboard({go,profile,refresh}){
   const {data,error,loading}=useFinance(),[plant,setPlant]=useState({count:0,kg:0}),[plantError,setPlantError]=useState('')
+  const [yucaProgress,setYucaProgress]=useState(null)
   const [now,setNow]=useState(()=>new Date()),[week,setWeek]=useState(()=>weekValue(costaRicaToday()))
   useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(timer)},[])
   const {start,end,year,week:weekNumber}=weekRange(week),totals=financeSummary(data)
@@ -147,6 +150,8 @@ function Dashboard({go,profile,refresh}){
   {loading?<div className="empty">Cargando cifras reales…</div>:error?<div className="formerror">{error}</div>:<><section className="panel"><div className="panelhead"><div><h3>Saldos actuales</h3><p>Acumulados a la fecha · Exportadora · Independientes de la semana seleccionada</p></div></div><div className="stats dashboard-balances">{['CRC','USD'].map(currency=><React.Fragment key={currency}><Stat title={`Cuentas por cobrar · ${currency}`} value={cash(totals[currency].receivable,currency)} note="Saldo pendiente de cobro confirmado" icon={ArrowUpRight}/><Stat title={`Cuentas por pagar · ${currency}`} value={cash(totals[currency].payable,currency)} note="Saldo pendiente de pago registrado" icon={ArrowDownRight}/><Stat title={`Dinero disponible · ${currency}`} value={cash(totals[currency].available,currency)} note="Total de bancos + efectivo" icon={Landmark}/></React.Fragment>)}</div></section>
   <div className="stats"><Stat title={`Pedidos USD · semana ${weekNumber}`} value={cash(weeklySales,'USD')} note="Según fecha de salida · previstos y confirmados" icon={CircleDollarSign}/><Stat title={`Ventas locales · semana ${weekNumber}`} value={cash(weeklyLocal)} note="Segundas y rechazo registrados" icon={ShoppingCart}/></div>
   <section className="panel"><div className="panelhead"><div><h3>Operación de planta · semana {weekNumber}</h3><p>{dateLabel(start)} al {dateLabel(end)}</p></div><button onClick={()=>go('Boletas de entrada')}>Ver boletas <ChevronRight size={16}/></button></div>{plantError?<div className="formerror">{plantError}</div>:<div className="plant"><div><b>{plant.count}</b><span>Boletas recibidas</span></div><div><b>{plant.kg.toLocaleString('es-CR')}</b><span>kg estimados de ingreso</span></div></div>}</section></>}
+  <EuropeYuca start={start} end={end} refresh={refresh} onProgress={setYucaProgress}/>
+  <PersonalPlan key={start} start={start} userId={profile.id} progress={yucaProgress}/>
   {['administrador','oficina'].includes(profile.rol)&&<WeekProfit start={start} end={end} refresh={refresh} go={go}/>}
   <OrderNeeds refresh={refresh} weekStart={start} weekEnd={end}/>
   {['administrador','oficina'].includes(profile.rol)&&<OperationalReview go={go} refresh={refresh}/>}
