@@ -81,7 +81,7 @@ function App({profile}){
       const {data,error}=await supabase.from('seguimiento_ejercicio').select('modulo,revision,historial').eq('id',1).maybeSingle()
       if(!active||error||!data||revision===data.revision)return
       revision=data.revision
-      if(allowed.includes(data.modulo)||data.modulo==='Cuentas por pagar'){setSection(data.modulo);setSearch('');setInitialHistory(data.historial)}
+      if(allowed.includes(data.modulo)||['Cuentas por pagar','Cuentas por cobrar'].includes(data.modulo)){setSection(data.modulo);setSearch('');setInitialHistory(data.historial)}
     }
     check()
     const timer=window.setInterval(check,3000)
