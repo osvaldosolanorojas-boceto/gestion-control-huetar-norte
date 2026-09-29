@@ -1,11 +1,13 @@
 import React,{useEffect,useMemo,useState} from 'react'
 import {supabase} from './supabase'
 import {buildLoadMap} from './load-map-model'
+import {makeLoadMapPDF} from './load-map-pdf'
 
 const fmt=n=>Number(n||0).toLocaleString('es-CR')
 const orderLabel=x=>`${x.cliente||'Cliente'}${x.numero_cliente?` ${x.numero_cliente}`:''} · Salida ${x.fecha_salida||'pendiente'}${x.contenedor?` · Contenedor ${x.contenedor}`:''} · ${x.codigo}`
 export default function LoadMap({go}){
   const [lines,setLines]=useState([]),[receipts,setReceipts]=useState([]),[purchases,setPurchases]=useState({}),[selected,setSelected]=useState(''),[error,setError]=useState(''),[loading,setLoading]=useState(true)
+  const [message,setMessage]=useState(''),[phones,setPhones]=useState({})
   const reload=async()=>{
     setLoading(true);setError('')
     const [a,b,c]=await Promise.all([supabase.rpc('pedidos_mapa_para_planta'),supabase.from('boleta_rendimientos').select('id,orden_venta_linea_id,cajas,posicion_paleta,codigo_trazabilidad,calidad,creado_en,boletas_entrada(codigo,orden_compra_id)').not('orden_venta_linea_id','is',null).order('creado_en').limit(1000),supabase.rpc('ordenes_compra_para_planta')])
@@ -19,8 +21,15 @@ export default function LoadMap({go}){
   const current=lines.filter(x=>x.orden_id===selected),ids=new Set(current.map(x=>x.linea_id)),assigned=receipts.filter(x=>ids.has(x.orden_venta_linea_id))
   const map=useMemo(()=>buildLoadMap(current,assigned),[lines,receipts,selected])
   const ordered=current.reduce((sum,x)=>sum+Number(x.cantidad_cajas||0),0),total=assigned.reduce((sum,x)=>sum+Number(x.cajas||0),0),pct=ordered?Math.min(100,Math.round(total/ordered*100)):0
+  const order=orders.find(x=>x.id===selected)
+  const filename=()=>`Mapa_carga_${order.codigo.replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf`
+  const pdf=()=>makeLoadMapPDF(order,map,purchases,ordered)
+  const print=()=>{setError('');const tab=window.open('','_blank');if(!tab){setError('Permita abrir la vista de impresión en su navegador.');return}const doc=pdf();doc.autoPrint();const url=URL.createObjectURL(doc.output('blob'));tab.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),60000);setMessage('Se abrió el mapa para imprimir. Si no aparece el diálogo, use Imprimir desde el visor del PDF.')}
+  const share=async()=>{setError('');setMessage('');try{const doc=pdf(),file=new File([doc.output('blob')],filename(),{type:'application/pdf'});if(navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:`Mapa de carga ${order.codigo}`})}else{doc.save(filename());setMessage('PDF descargado. Abra el chat del teléfono y adjunte el archivo en WhatsApp.')}}catch(e){if(e.name!=='AbortError')setError('No se pudo compartir. Descargue el PDF y adjúntelo en WhatsApp.')}}
+  const chat=()=>{const digits=(phones[selected]||'').replace(/\D/g,'');if(!(digits.length===8||digits.length>=10&&digits.length<=15)){setError('Indique 8 dígitos para Costa Rica o el número con código internacional.');return}setError('');window.open(`https://wa.me/${digits.length===8?'506'+digits:digits}?text=${encodeURIComponent(`Mapa de carga ${order.cliente} · ${order.codigo} · Contenedor ${order.contenedor||'pendiente'}`)}`,'_blank','noopener,noreferrer')}
   return <><div className="modulebar"><div><p>Avance calculado con los rendimientos guardados. Una partida de 450 cajas se reparte entre paletas de 60, conservando su boleta y código.</p></div><button onClick={reload} disabled={loading}>Actualizar avance</button></div>
     {error&&<div className="formerror">{error}</div>}{loading?<div className="empty">Cargando pedidos y boletas…</div>:!orders.length?<div className="empty">Todavía no hay órdenes de venta con líneas.</div>:<><div className="load-selector"><label>Pedido o contenedor<select value={selected} onChange={e=>setSelected(e.target.value)}>{orders.map(x=><option key={x.id} value={x.id}>{orderLabel(x)}</option>)}</select></label><button onClick={()=>go('Boletas de entrada')}>Ir a boletas</button></div>
+    <div className="load-selector"><button type="button" onClick={print}>Imprimir mapa</button><button type="button" onClick={()=>pdf().save(filename())}>Descargar PDF</button><button type="button" onClick={share}>Compartir por WhatsApp</button><label>Teléfono para WhatsApp<input type="tel" value={phones[selected]||''} onChange={e=>setPhones(p=>({...p,[selected]:e.target.value}))} placeholder="+506 o código internacional"/></label><button type="button" onClick={chat}>Abrir chat del teléfono</button></div><p className="sale-help">En iPhone, compartir abre el menú para elegir WhatsApp y el contacto. Al abrir el chat del teléfono, adjunte el PDF descargado.</p>{message&&<div className="notice" role="status">{message}</div>}
     <div className="load-overview"><div><small>Avance del pedido</small><strong>{fmt(total)} / {fmt(ordered)} cajas</strong><span>{pct}% asignado desde planta · {fmt(Math.max(0,ordered-total))} pendientes</span></div><div className="load-track"><div style={{width:`${pct}%`}}/></div></div>
     <div className="load-lines">{current.map(line=>{const count=assigned.filter(r=>r.orden_venta_linea_id===line.linea_id).reduce((sum,r)=>sum+Number(r.cajas),0);return <article key={line.linea_id}><b>{line.producto} · {line.presentacion_kg} kg · {line.carton||'Cartón'}</b><span>{fmt(count)} de {fmt(line.cantidad_cajas)} cajas · {line.paletas} paletas de {line.cajas_por_paleta}</span><div className="load-track"><div style={{width:`${Math.min(100,Math.round(count/Number(line.cantidad_cajas)*100)||0)}%`}}/></div></article>})}</div>
     <h3>Mapa de paletas</h3><p className="sale-help">La posición anotada en planta sirve como inicio. Si la partida excede la capacidad de esa paleta, el mapa continúa en las siguientes posiciones disponibles. El mapa refleja asignación; confirme la carga física al despachar.</p>
