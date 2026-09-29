@@ -1,16 +1,16 @@
 import React,{useEffect,useState} from 'react'
 import {Plus,X} from 'lucide-react'
 import {supabase} from './supabase'
-import {addDays,costaRicaToday,isoWeek,sundayOf,weeklyTotals,isIntegralPlantEstimate} from './weekly-model'
-import {periodShare} from './cost-model'
+import {addDays,costaRicaToday,isoWeek,mondayOf,weeklyTotals,isIntegralPlantEstimate} from './weekly-model'
+import {loadWeeklyRecords} from './weekly-data'
 
 const money=(n,currency)=>new Intl.NumberFormat('es-CR',{style:'currency',currency,maximumFractionDigits:2}).format(Number(n)||0)
 const labels={planilla:'Planilla',inventario:'Material consumido',servicios:'Servicios (luz, agua, gas)',contenedor:'Gasto de contenedor',transporte:'Transporte',otros:'Otro gasto'}
 const blank=()=>({fecha:costaRicaToday(),categoria:'planilla',concepto:'',moneda:'CRC',monto:'',trabajador_id:'',orden_venta_id:'',unidad:'',cantidad:'',tarifa:'',referencia:'',observaciones:'',tipo_detalle:'',beneficiario_nombre:'',fecha_vencimiento:'',genera_cxp:false})
 const value=n=>n===''?null:Number(n)
 
-export default function WeeklyClose({go}){
-  const [weekStart,setWeekStart]=useState(()=>sundayOf(costaRicaToday()))
+export default function WeeklyClose({go,initialStart}){
+  const [weekStart,setWeekStart]=useState(()=>initialStart||mondayOf(costaRicaToday()))
   const [records,setRecords]=useState({sales:[],purchases:[],fixedPurchases:[],freights:[],purchasePayroll:[],openStanding:[],startedStanding:[],locals:[],fieldSales:[],directSales:[],costs:[],notes:[],manual:[],payroll:[],productionCosts:[],cartonCosts:[],cartonMissing:[],simulatedOrders:[],outdatedPrices:[],chronology:[],confirmedCosts:[]})
   const [workers,setWorkers]=useState([]),[orders,setOrders]=useState([]),[balances,setBalances]=useState({receivables:[],payables:[]})
   const [loading,setLoading]=useState(true),[error,setError]=useState(''),[editing,setEditing]=useState(null),[form,setForm]=useState(blank),[saving,setSaving]=useState(false)
@@ -18,61 +18,10 @@ export default function WeeklyClose({go}){
   const saturday=addDays(weekStart,6),next=addDays(weekStart,7),week=isoWeek(addDays(weekStart,1))
   const reload=async()=>{
     setLoading(true);setError('')
-    const results=await Promise.all([
-      supabase.from('ordenes_venta').select('id,codigo,monto_cxc,moneda,mercado,finalizada_en').not('finalizada_en','is',null).gte('fecha_salida',weekStart).lte('fecha_salida',saturday),
-      supabase.from('boletas_entrada').select('id,codigo,monto_cxp,finalizada_en').not('finalizada_en','is',null).gte('fecha_labor',weekStart).lte('fecha_labor',saturday),
-      supabase.from('ventas_locales').select('id,codigo,fecha,moneda,ventas_segundas(subtotal)').gte('fecha',weekStart).lte('fecha',saturday),
-      supabase.from('costos_operativos').select('*').gte('fecha',weekStart).lte('fecha',saturday).is('anulado_en',null).order('fecha',{ascending:false}).limit(1000),
-      supabase.from('trabajadores').select('id,nombre').eq('activo',true).order('nombre').limit(1000),
-      supabase.from('ordenes_venta').select('id,codigo,contenedor,fecha_salida,finalizada_en').order('creado_en',{ascending:false}).limit(1000),
-      supabase.from('cxp_operativa').select('origen_id,codigo,fecha,monto,etapa').in('etapa',['Puesto en camión · precio fijo','En campo · pesaje pactado']).gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('cxp_operativa').select('origen,origen_id,codigo,fecha,monto,contraparte').eq('origen','flete_compra').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('notas_credito_ventas').select('id,fecha,monto,motivo,ordenes_venta(codigo,moneda)').gte('fecha',weekStart).lte('fecha',saturday),
-      supabase.from('cuentas_manuales').select('id,codigo,fecha,tipo,monto,moneda,costo_operativo_id').gte('fecha',weekStart).lte('fecha',saturday),
-      supabase.from('cxc_operativa').select('origen,origen_id,codigo,fecha,fecha_salida,moneda,monto,aplicado,etapa').lte('fecha',saturday).limit(1000),
-      supabase.from('cxp_operativa').select('origen,origen_id,codigo,fecha,moneda,monto,aplicado,etapa').lte('fecha',saturday).limit(1000),
-      supabase.from('planillas_planta').select('id,trabajador_id,bruto,neto').eq('semana_inicio',weekStart).is('anulado_en',null).limit(1000),
-      supabase.from('costos_produccion').select('id,categoria,concepto,periodo_inicio,periodo_fin,moneda,monto,producto').lte('periodo_inicio',saturday).gte('periodo_fin',weekStart).is('anulado_en',null).limit(1000),
-      supabase.from('jornadas_trabajo').select('id,trabajador_id,costo_bruto,tipo_pago').gte('fecha_labor',weekStart).lte('fecha_labor',saturday).limit(2000),
-      supabase.from('planillas_fijas').select('id,trabajador_id,periodo_inicio,periodo_fin,costo_total,neto').lte('periodo_inicio',saturday).gte('periodo_fin',weekStart).limit(1000),
-      supabase.from('costos_cartones').select('carton_id,fecha,cantidad,precio_unitario,moneda,simulado').lte('fecha',saturday).limit(1000),
-      supabase.from('ordenes_venta_lineas').select('orden_venta_id,carton_id,cantidad_cajas,presentacion_kg').limit(2000),
-      supabase.from('tasas_corte_semanal').select('usd_crc,fuente,simulado').eq('semana_inicio',weekStart).maybeSingle(),
-      supabase.from('cxp_operativa').select('origen_id,codigo,fecha,monto,etapa').eq('origen','planilla_compra').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('pedidos_ejercicio').select('orden_venta_id').limit(1000),
-      supabase.from('ordenes_compra').select('id,codigo,fecha,precio_en_pie,en_pie_finalizada_en').eq('tipo_compra','En pie').lte('fecha',saturday).neq('estado','Anulada').limit(1000),
-      supabase.from('boletas_entrada').select('orden_compra_id,fecha_labor,finalizada_en').not('orden_compra_id','is',null).not('finalizada_en','is',null).limit(2000),
-      supabase.from('ordenes_compra').select('id,codigo,precio_eeuu').like('codigo',`OC-EJ-${week.week}-%`).eq('producto','Yuca').eq('precio_eeuu',7000).limit(1000),
-      supabase.from('ventas_rechazo_campo').select('id,orden_compra_id,fecha,comprador,sacos,kg_brutos,kg_pagables,castigo_pct,precio_quintal,monto,moneda').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('ventas_externas_en_pie').select('id,fecha,producto,comprador,cantidad,unidad,precio_unitario,moneda').gte('fecha',weekStart).lte('fecha',saturday).limit(1000),
-      supabase.from('boleta_rendimientos').select('cajas,kg_resultado,boletas_entrada(codigo,fecha_labor,fecha_hora),ordenes_venta_lineas(ordenes_venta(codigo,fecha_salida))').not('orden_venta_linea_id','is',null).limit(2000),
-      supabase.from('revision_gastos_contenedor').select('orden_venta_id').limit(1000)
-    ])
-    setLoading(false)
-    const failure=results.find(r=>r.error)?.error
-    if(failure){setError(`No se pudo cargar el corte: ${failure.message}`);return}
-    if(results[6].data?.length===1000||results[7].data?.length===1000||results[10].data?.length===1000||results[11].data?.length===1000||results[13].data?.length===1000||results[14].data?.length===2000||results[15].data?.length===1000||results[16].data?.length===1000||results[17].data?.length===2000||results[19].data?.length===1000||results[20].data?.length===1000||results[21].data?.length===1000||results[22].data?.length===2000||results[23].data?.length===1000||results[24].data?.length===1000||results[25].data?.length===1000||results[26].data?.length===2000||results[27].data?.length===1000){setError('Hay más registros que el límite de consulta; no se muestran cifras parciales.');return}
-    setRate(results[18].data||null);setEditingRate(false)
-    setBalances({receivables:results[10].data||[],payables:results[11].data||[]})
-    const older=results[12].data||[],legacyIds=new Set(older.map(x=>x.trabajador_id))
-    const hourly=[...new Set((results[14].data||[]).filter(x=>x.tipo_pago==='Por horas'&&!legacyIds.has(x.trabajador_id)).map(x=>x.trabajador_id))].map(id=>{const total=(results[14].data||[]).filter(x=>x.trabajador_id===id).reduce((v,x)=>v+Number(x.costo_bruto||0),0);return {id:`jornadas-${id}`,trabajador_id:id,bruto:total,neto:total}})
-    const fixed=(results[15].data||[]).filter(x=>!legacyIds.has(x.trabajador_id)).map(x=>({id:`fijo-${x.id}`,trabajador_id:x.trabajador_id,bruto:periodShare({periodo_inicio:x.periodo_inicio,periodo_fin:x.periodo_fin,monto:x.costo_total},weekStart,saturday),neto:periodShare({periodo_inicio:x.periodo_inicio,periodo_fin:x.periodo_fin,monto:x.neto},weekStart,saturday)}))
-    const allOrders=results[5].data||[],priced=results[16].data||[],cartonCosts=[],cartonMissing=[]
-    for(const line of results[17].data||[]){const order=allOrders.find(o=>o.id===line.orden_venta_id);if(!line.carton_id||!order?.finalizada_en||!order.fecha_salida||order.fecha_salida<weekStart||order.fecha_salida>saturday)continue
-      const candidates=priced.filter(c=>c.carton_id===line.carton_id&&c.fecha<=order.fecha_salida&&Number(c.precio_unitario)>0),prices=[...new Set(candidates.map(c=>`${c.moneda}:${c.precio_unitario}`))]
-      const usedToDate=(results[17].data||[]).filter(x=>x.carton_id===line.carton_id&&allOrders.some(o=>o.id===x.orden_venta_id&&o.finalizada_en&&o.fecha_salida<=order.fecha_salida)).reduce((sum,x)=>sum+Number(x.cantidad_cajas||0),0)
-      if(prices.length!==1||candidates.reduce((sum,c)=>sum+Number(c.cantidad),0)<usedToDate){cartonMissing.push({codigo:order.codigo,cantidad:line.cantidad_cajas,reason:prices.length===0?'Falta precio':prices.length>1?'Hay varios precios; falta asignar lote':'Faltan cartones con costo'});continue}
-      const [currency,unit]=prices[0].split(':');cartonCosts.push({codigo:order.codigo,moneda:currency,monto:Number(line.cantidad_cajas)*Number(unit),cantidad:line.cantidad_cajas,simulado:candidates.some(c=>c.simulado)})
-    }
-    const standing=(results[21].data||[]).map(order=>{
-      const dates=(results[22].data||[]).filter(b=>b.orden_compra_id===order.id).map(b=>b.fecha_labor||b.finalizada_en?.slice(0,10)).filter(Boolean).sort()
-      return {...order,costDate:dates[0]||order.en_pie_finalizada_en?.slice(0,10)||null,started:dates.length>0}
-    })
-    const standingExpense=standing.filter(x=>x.costDate>=weekStart&&x.costDate<=saturday).map(x=>({origen_id:x.id,codigo:x.codigo,fecha:x.costDate,monto:x.precio_en_pie,etapa:x.started?'Compra en pie · primer lote procesado':'Compra en pie · lote finalizado'}))
-    const simulatedOrders=(results[20].data||[]).map(x=>x.orden_venta_id)
-    const chronology=Object.values((results[26].data||[]).reduce((groups,r)=>{const sale=r.ordenes_venta_lineas?.ordenes_venta,source=r.boletas_entrada,origin=source?.fecha_labor||source?.fecha_hora?.slice(0,10);if(!sale?.fecha_salida||sale.fecha_salida<weekStart||sale.fecha_salida>saturday||!origin||origin<=sale.fecha_salida)return groups;const key=`${sale.codigo}:${source.codigo}`;const item=groups[key]||(groups[key]={pedido:sale.codigo,salida:sale.fecha_salida,boleta:source.codigo,origen:origin,cajas:0,kg:0});item.cajas+=Number(r.cajas||0);item.kg+=Number(r.kg_resultado||0);return groups},{}))
-    setRecords({sales:results[0].data||[],purchases:results[1].data||[],locals:results[2].data||[],fieldSales:results[24].data||[],directSales:results[25].data||[],chronology,costs:results[3].data||[],fixedPurchases:[...(results[6].data||[]),...standingExpense],freights:results[7].data||[],purchasePayroll:results[19].data||[],openStanding:standing.filter(x=>!x.costDate&&!x.en_pie_finalizada_en),startedStanding:standing.filter(x=>x.started&&!x.en_pie_finalizada_en&&x.costDate>=weekStart&&x.costDate<=saturday),notes:results[8].data||[],manual:results[9].data||[],payroll:[...older,...hourly,...fixed],productionCosts:(results[13].data||[]).map(row=>({...row,weekAmount:periodShare(row,weekStart,saturday)})),cartonCosts,cartonMissing,simulatedOrders,outdatedPrices:week.year===2026?results[23].data||[]:[],confirmedCosts:(results[27].data||[]).map(x=>x.orden_venta_id)})
-    setWorkers(results[4].data||[]);setOrders(allOrders)
+    try{
+      const result=await loadWeeklyRecords(weekStart,saturday)
+      setRecords(result.records);setWorkers(result.workers);setOrders(result.orders);setBalances(result.balances);setRate(result.rate);setEditingRate(false)
+    }catch(e){setError(e.message)}finally{setLoading(false)}
   }
   useEffect(()=>{reload()},[weekStart])
   const totals=weeklyTotals(records)
@@ -124,7 +73,7 @@ export default function WeeklyClose({go}){
     reload()
   }
   return <><div className="modulebar"><div><p>Registre costos de la semana y vea ingresos y compras finalizados. El resultado es parcial hasta completar planilla, inventario y demás gastos.</p></div><button className="primary" onClick={()=>open()}><Plus size={18}/>Registrar costo</button></div>
-    <div className="weekly-nav"><button onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Semana anterior</button><label>Semana {week.week} · {week.year}<input type="date" value={weekStart} onChange={e=>e.target.value&&setWeekStart(sundayOf(e.target.value))}/></label><span>Del {weekStart} al {saturday}</span><button onClick={()=>setWeekStart(next)}>Semana siguiente →</button></div>
+    <div className="weekly-nav"><button onClick={()=>setWeekStart(addDays(weekStart,-7))}>← Semana anterior</button><label>Semana {week.week} · {week.year}<input type="date" value={weekStart} onChange={e=>e.target.value&&setWeekStart(mondayOf(e.target.value))}/></label><span>Del {weekStart} al {saturday}</span><button onClick={()=>setWeekStart(next)}>Semana siguiente →</button></div>
     {error&&!editing&&<div className="formerror" role="alert">{error}</div>}
     {loading?<div className="empty">Cargando el corte semanal…</div>:<>{records.sales.some(x=>records.simulatedOrders.includes(x.id))&&<div className="bank-note"><b>EJERCICIO/SIMULADO:</b> esta semana incluye pedidos cerrados con producción y costos de prueba. Revise las boletas, precios, inventario y cobros antes de usar este resultado como cifra real.</div>}{integralEstimate.length>0&&<div className="bank-note"><b>Costo integral estimado de planta:</b> {money(integralEstimate.reduce((sum,row)=>sum+Number(row.weekAmount||0),0),'CRC')} en {integralEstimate.length} boletas. La planilla detallada ({money(detailedPayroll,'CRC')}) y los consumos de planta ({money(detailedPlantCosts.filter(row=>row.moneda==='CRC').reduce((sum,row)=>sum+Number(row.weekAmount||0),0),'CRC')} · {money(detailedPlantCosts.filter(row=>row.moneda==='USD').reduce((sum,row)=>sum+Number(row.weekAmount||0),0),'USD')}) se muestran para revisión, pero ya están cubiertos por esa estimación y no se suman otra vez al resultado. Cuando tenga el desglose real completo, sustituya o anule los costos integrales de prueba para que el corte use las partidas reales.</div>}{records.chronology.length>0&&<div className="formerror"><b>Origen posterior a la salida:</b> {records.chronology.reduce((sum,r)=>sum+r.kg,0).toLocaleString('es-CR')} kg de {records.chronology.length} boletas fueron asignados a pedidos que salieron antes. Corrija el abastecimiento del pedido antes de considerar cerrado el ejercicio.{records.chronology.map(r=><p key={`${r.pedido}:${r.boleta}`}>{r.pedido} salió {r.salida}; {r.boleta} se trabajó {r.origen}: {r.cajas} cajas, {r.kg.toLocaleString('es-CR')} kg.</p>)}<button type="button" onClick={()=>go('Boletas de entrada')}>Revisar boletas</button></div>}<div className="bank-note">Resultado operativo <b>parcial</b>: se asignan pedidos finalizados por fecha de salida y boletas por fecha laborada, aunque se finalicen después; las compras en pie se reconocen al procesar la primera boleta o, si no hubo proceso, al finalizar el lote. Las compras puestas en camión, en campo, los fletes y las planillas de compra se asignan a la fecha de su documento. No vuelva a registrar fletes, planilla ni consumos capturados en Control de costos como un gasto manual adicional. Los movimientos bancarios no se vuelven a sumar. Las notas de crédito descuentan en la semana de emisión. Los importes en USD y CRC permanecen separados.</div>{records.openStanding.length>0&&<div className="bank-note"><b>Compras en pie abiertas:</b> {money(records.openStanding.reduce((sum,x)=>sum+Number(x.precio_en_pie||0),0),'CRC')} pactados en {records.openStanding.length} lote(s). Se muestran como compromiso pendiente porque aún no tienen boletas finalizadas. Al procesar la primera boleta, el precio pactado se carga una sola vez al resultado.</div>}
       {records.startedStanding.length>0&&<div className="bank-note"><b>En pie con producción:</b> {money(records.startedStanding.reduce((sum,x)=>sum+Number(x.precio_en_pie||0),0),"CRC")} de precio pactado ya se descuentan esta semana porque tienen boletas finalizadas. Confirme el precio final al cerrar cada lote.</div>}
