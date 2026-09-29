@@ -83,3 +83,7 @@
 
 .section-back{display:inline-flex;align-items:center;gap:7px;margin:0 0 14px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#234b3a;font-weight:600;cursor:pointer}
 .section-back:hover{background:#eff7f1}
+
+.dashboard-clock{text-align:right}.dashboard-clock strong,.dashboard-clock small{display:block}.dashboard-clock strong{font-size:26px;font-variant-numeric:tabular-nums}.dashboard-clock small{margin-top:6px}.dashboard-balances{grid-template-columns:repeat(3,minmax(0,1fr));padding:18px}.dashboard-week{margin:18px 0}.dashboard-week input{font-size:16px;padding:8px;border:1px solid #ccd8e8;border-radius:8px}.exchange details{font-size:12px}.exchange details .exchange{position:static;background:#fff;color:#15355d;padding:8px;border-radius:8px}@media(max-width:760px){.dashboard-balances{grid-template-columns:1fr}.hero{flex-wrap:wrap;gap:16px}.dashboard-clock{text-align:left}.dashboard-week{flex-wrap:wrap}}
+
+.dashboard-exchange{margin-top:16px;padding:16px}.dashboard-exchange>.exchange{display:block;text-align:left;border:0;max-width:none;padding:0}.dashboard-exchange>.exchange>b{font-size:18px}.dashboard-exchange .exchange details{margin-top:10px}.dashboard-exchange .exchange details .exchange{display:block;max-width:none;text-align:left;border:0}
