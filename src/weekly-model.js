@@ -28,11 +28,13 @@ export const isIntegralPlantEstimate=row=>/EJERCICIO.*proceso de planta a/i.test
 export function weeklyResult(totals){
   return Object.fromEntries(['CRC','USD'].map(currency=>{const t=totals[currency],income=t.export+t.local+t.manualIncome-t.credits,expense=t.product+t.freight+t.costs;return [currency,{income,expense,result:income-expense}]}))
 }
-export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],purchasePayroll=[],locals=[],fieldSales=[],directSales=[],costs=[],notes=[],manual=[],payroll=[],productionCosts=[],cartonCosts=[]}){
+export function weeklyTotals({sales=[],purchases=[],fixedPurchases=[],freights=[],purchasePayroll=[],locals=[],fieldSales=[],directSales=[],costs=[],notes=[],manual=[],payroll=[],productionCosts=[],cartonCosts=[],inventory={opening:0,closing:0},saldoSales=[]}){
   const totals={CRC:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0},USD:{export:0,local:0,product:0,freight:0,costs:0,credits:0,manualIncome:0}}
   const hasIntegralEstimate=productionCosts.some(isIntegralPlantEstimate)
   for(const row of sales){const currency=row.moneda||'USD';if(totals[currency])totals[currency][row.mercado==='Costa Rica'?'local':'export']+=Number(row.monto_cxc||0)}
   for(const row of purchases)totals.CRC.product+=Number(row.monto_cxp||0)
+  totals.CRC.product+=Number(inventory.opening||0)-Number(inventory.closing||0)
+  for(const row of saldoSales)if(totals[row.moneda])totals[row.moneda].local+=Number(row.kg_primera||0)/46*Number(row.precio_final_qq||0)
   for(const row of fixedPurchases)totals.CRC.product+=Number(row.monto||0)
   for(const row of freights)totals.CRC.freight+=Number(row.monto||0)
   for(const row of purchasePayroll)totals.CRC.costs+=Number(row.monto||0)
