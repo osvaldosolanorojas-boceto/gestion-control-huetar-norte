@@ -13,4 +13,5 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node tests/weekly-reprocess.test.mjs
       - run: npm run build
