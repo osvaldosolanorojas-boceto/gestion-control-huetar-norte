@@ -52,3 +52,12 @@ test('Traslado de activo cambia ubicación, conserva inversión empresarial',()=
  const a=[asset('a','Tractor',10000)],moved=[{...a[0],finca_id:'b'}]
  const total=list=>['a','b'].reduce((sum,id)=>sum+farmInvestment(id,list,[],[],[],[]).total,0);assert.equal(total(a),total(moved));assert.equal(farmInvestment('a',moved,[],[],[],[]).total,0)
 })
+
+test('ciclos abiertos reemplazan el total histórico del lote sin duplicar gastos',()=>{
+ const result=farmInvestment('F',[],[{id:'L',finca_id:'F',inversion_en_curso:true}],[{id:'K',lote_id:'L',monto:1000}],[],[],[{id:'C',lote_id:'L',finca_id:'F',estado:'Abierto',costos_crc:300},{id:'C2',lote_id:'L',finca_id:'F',estado:'Cerrado',costos_crc:900}])
+ assert.equal(result.cultivation,300);assert.equal(result.activeLots,1)
+})
+test('gasto compartido sólo deja pendiente su parte no repartida',()=>{
+ const result=farmInvestment('F',[],[],[{id:'K',finca_id:'F',lote_id:null,monto:1000}],[],[],[{id:'C',lote_id:'L',finca_id:'F',estado:'Abierto',costos_crc:600}],[{costo_id:'K',ciclo_id:'C',monto:600}])
+ assert.equal(result.cultivation,600);assert.equal(result.unallocatedCosts,400)
+})

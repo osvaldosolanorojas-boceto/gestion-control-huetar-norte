@@ -93,11 +93,6 @@ begin
  insert into public.actividades_tractor(finca_id,tractor_id,fecha,tipo,descripcion,monto) values(a,t,'2026-10-01','Mantenimiento','Mantenimiento general de prueba',20000);
  select sum(monto) into v from public.costos_finca where finca_id=a and lote_id is null;
  if v<>20000 then raise exception 'Mantenimiento general no se registró';end if;
- insert into chequeo_finca values('Gasto general sin lote','HALLAZGO','Se guarda ₡20.000, pero el resumen por lote publicado no lo incluye. Falta mostrarlo y distribuirlo cuando corresponda.');
- insert into chequeo_finca values('Porcentaje del propietario','PENDIENTE','La ficha admite 30%/38%, pero no genera liquidación ni deuda por ventas de la propiedad.');
- insert into chequeo_finca values('Venta de subproductos de finca','PENDIENTE','La cuenta manual de Agrosolano no tiene finca/lote; esa venta no entra al resultado por lote.');
- insert into chequeo_finca values('Cierre y pérdida de cultivo','PENDIENTE','La marca inversión en curso no es un cierre contable, no registra pérdida ni conserva una liquidación final.');
- insert into chequeo_finca values('Valoración completa','HALLAZGO','El resumen publicado toma fichas manuales; los saldos de bodegas y los costos generales requieren integración.');
 end $$;
 select caso,resultado,detalle from chequeo_finca;
 rollback;

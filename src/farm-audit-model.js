@@ -37,18 +37,18 @@ export const auditedChecks=[
  ['Tractor de otra finca','OK','Rechaza una asignación incorrecta.'],
  ['Gastos generales sin lote','Corregido','Ahora se muestran aparte y se pueden asignar a un lote de la misma finca.'],
  ['Valor del inventario','Corregido','La inversión usa saldos de bodega y conserva fichas manuales como referencia, sin sumarlas dos veces.'],
- ['Liquidación del dueño','Pendiente','El 30%/38% está en el contrato. Falta calcular la liquidación sobre las ventas agrícolas de la propiedad y generar la deuda.'],
- ['Subproductos por finca','Pendiente','Las ventas directas necesitan origen finca/lote, kilos, precio y cuenta por cobrar propia.'],
- ['Cierre y pérdida del cultivo','Pendiente','La marca en curso no sustituye una liquidación final ni un registro de pérdida.']
+ ['Liquidación del dueño','Implementado','Porcentaje editable sobre venta bruta EN CAMPO; genera deuda en Agrosolano, conserva pagos y registra reintegro si corresponde.'],
+ ['Subproductos por finca','Implementado','Cosechas y salidas por cultivo, lote, producto, calidad y unidad. Venta directa genera cuenta por cobrar de Agrosolano.'],
+ ['Cierre y pérdida del cultivo','Implementado','Pérdidas con motivo, arrastre de cantidad y costo, cierre con fotografía del resultado y reapertura con historial.']
 ]
 export const farmPriorities=[
- ['Primero','Ciclo de cultivo','Área, variedad, siembra, cosecha estimada y real, cosechas parciales, estado, responsable y costo por hectárea/quintal. Un lote puede tener varios ciclos.'],
- ['Primero','Cosecha y balance físico','Kilos cosechados = entregados + vendidos directamente + semilla retenida + remanente + pérdidas. Evitar vender dos veces la misma cantidad.'],
- ['Primero','Ventas directas y subproductos','Primera local, segunda, rechazo, semilla/estacas y otros, con cliente, origen, unidad/peso y cobro. La venta de planta pertenece a exportadora; no se suma otra vez en finca.'],
- ['Primero','Liquidación del propietario','Base bruta por propiedad; porcentaje pactado, anticipos, pagos, saldo y correcciones. Aclarar cómo se tratan devoluciones/descuentos y semilla antes de automatizar.'],
- ['Primero','Cierre del cultivo','Cierre parcial/final, costos pendientes, ventas pendientes, pérdidas, remanentes y reapertura con motivo. Conservar resultado e historial.'],
- ['Primero','Costos compartidos','Repartir planilla, combustible, alquiler y caminos entre lotes con criterio visible: horas, hectáreas o monto manual. Mostrar lo que queda sin asignar.'],
- ['Primero','Una ficha por máquina','Unificar la ficha patrimonial y la ficha de operación del tractor para tener valor, horómetro, trabajos y mantenimiento sin doble registro.'],
+ ['Disponible','Ciclo de cultivo','Siembra, producto, área, cosecha estimada y estado por ciclo. Un lote puede tener varios ciclos. Variedad, responsable y reporte de productividad quedan para ampliar.'],
+ ['Disponible','Cosecha y balance físico','Kilos cosechados = entregados + vendidos directamente + semilla retenida + remanente + pérdidas. Evitar vender dos veces la misma cantidad.'],
+ ['Disponible','Ventas directas y subproductos','Primera local, segunda, rechazo, semilla/estacas y otros, con cliente, origen, unidad/peso y cobro. La venta de planta pertenece a exportadora; no se suma otra vez en finca.'],
+ ['Disponible','Liquidación del propietario','Base bruta en campo por cultivo de la propiedad; porcentaje pactado, deuda, pagos y saldo. Correcciones con reintegro. Los anticipos anteriores a ventas todavía requieren registro y conciliación manual.'],
+ ['Disponible','Cierre del cultivo','Consulta parcial en todo momento y cierre final con costos y entregas revisados, remanentes destinados y reapertura con motivo. Conserva fotografía e historial.'],
+ ['Disponible','Costos compartidos','Repartir un gasto general entre cultivos de la administración por hectáreas o monto manual; conservar el gasto original y mostrar la parte sin repartir.'],
+ ['Disponible','Una ficha por máquina','Valoración enlazada a un único tractor operativo; combustible, litros, horómetro, trabajos y mantenimiento desde la ficha, con un solo gasto.'],
  ['Después','Compras de insumos en USD','Conservar deuda en la moneda original y tipo de cambio de cada compra. Separar diferencia cambiaria del costo agrícola.'],
  ['Después','Bodega completa','Devoluciones a central/proveedor, sobrantes, pérdidas, conteos físicos, responsable y motivo de ajuste; lotes de producto y vencimiento cuando aplique.'],
  ['Después','Traslados e historial de maquinaria','Guardar finca origen/destino y fecha; conservar gastos históricos aunque cambie la ubicación actual. Registrar venta, baja o pérdida del equipo.'],
