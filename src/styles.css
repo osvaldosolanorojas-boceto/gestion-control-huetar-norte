@@ -95,3 +95,16 @@
 .personal-plan{margin:20px 0;overflow:hidden}.personal-plan-total{padding:16px 18px;background:#edf3fa;color:#143f66}.personal-plan table{width:100%;border-collapse:collapse}.personal-plan th,.personal-plan td{padding:12px;border-bottom:1px solid #c6d7e6;text-align:left;overflow-wrap:anywhere}.personal-plan th{background:#e4edf6;color:#153d62}.personal-plan td button{padding:7px 10px;margin:3px;border:1px solid #a3bbd2;border-radius:7px;background:#eaf2fc;color:#174d7e}.personal-plan-form{border-top:1px solid #b8ccdf;background:#f1f6fc}.personal-plan-form input{font-size:16px}.personal-plan-actions{display:flex;gap:10px;flex-wrap:wrap;padding:0 18px 18px}@media(max-width:760px){.personal-plan table{min-width:580px}}
 
 .personal-plan-total{display:flex;gap:12px;flex-wrap:wrap}.personal-plan-total>span{display:block;padding:9px 12px;background:#dce9f7;border-radius:8px}
+
+/* Controles de finca: fichas y ejercicio legibles en teléfonos. */
+.farm-panel .panelhead{flex-wrap:wrap;gap:12px}
+.farm-panel .panelhead>div{flex:1 1 240px;min-width:0}
+.farm-panel .formgrid{padding:16px 0;grid-template-columns:repeat(2,minmax(0,1fr))}
+.farm-panel label{min-width:0}
+.farm-panel input,.farm-panel select,.farm-panel textarea{min-width:0}
+.farm-panel input[type=checkbox]{display:inline-block;width:20px;height:20px;vertical-align:middle;margin:8px}
+.farm-panel .farm-line{flex-wrap:wrap;overflow-wrap:anywhere}
+.farm-panel .farm-metrics b{overflow-wrap:anywhere}
+.farm-panel summary{padding:12px 0;cursor:pointer}
+.farm-panel textarea{min-height:76px}
+@media(max-width:680px){.farm-panel .formgrid{grid-template-columns:1fr}.farm-panel .formgrid .wide{grid-column:auto}.farm-panel input,.farm-panel select,.farm-panel textarea{font-size:16px}}
