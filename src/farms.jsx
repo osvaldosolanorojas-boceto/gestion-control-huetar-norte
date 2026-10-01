@@ -4,6 +4,7 @@ import {supabase} from './supabase'
 import {cash} from './finance'
 import FarmProperties from './farm-properties'
 import FarmAssets from './farm-assets'
+import FarmExample from './farm-example'
 
 const year=new Date().getFullYear()
 const blankCost=()=>({lote_id:'',fecha:new Date().toLocaleDateString('en-CA'),categoria:'Planilla',descripcion:'',monto:''})
@@ -42,6 +43,7 @@ export default function Farms(){
     setCostForm(f=>({...blankCost(),lote_id:f.lote_id}));reload()
   }
   return <><div className="modulebar"><p>Producción propia por finca, año y lote. Las compras de Agro Solano se enlazan desde Órdenes de compra; los pagos se toman de Bancos.</p></div>{error&&<div className="formerror">{error}</div>}
+    <FarmExample/>
     <FarmProperties farms={farms} onChange={loadProperties}/>
     <FarmAssets farms={farms} lots={lots} costs={costs} orders={orders} reload={reload}/>
     <section className="panel farm-panel"><h3>Fincas y lotes</h3><div className="formgrid"><label>Nueva finca<input value={farmName} onChange={e=>setFarmName(e.target.value)} placeholder="Nombre de la finca"/></label><button type="button" onClick={saveFarm} disabled={saving}><Plus size={16}/>Guardar finca</button></div><div className="formgrid"><label>Finca<select value={lotForm.finca_id} onChange={e=>setLotForm({...lotForm,finca_id:e.target.value,propiedad_id:''})}><option value="">Seleccione la finca</option>{farms.map(f=><option key={f.id} value={f.id}>{f.nombre}</option>)}</select></label><label>Propiedad<select value={lotForm.propiedad_id||''} onChange={e=>setLotForm({...lotForm,propiedad_id:e.target.value})}><option value="">Seleccione la propiedad</option>{properties.filter(p=>p.finca_id===lotForm.finca_id).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label><label>Año<input type="number" min="2000" max="2100" value={lotForm.anio} onChange={e=>setLotForm({...lotForm,anio:e.target.value})}/></label><label>Nombre o código del lote<input value={lotForm.nombre} onChange={e=>setLotForm({...lotForm,nombre:e.target.value})} placeholder="Ejemplo: Lote 1"/></label><label>Producto previsto<input value={lotForm.producto} onChange={e=>setLotForm({...lotForm,producto:e.target.value})} placeholder="Opcional"/></label><button type="button" className="primary" onClick={saveLot} disabled={saving}>Guardar lote</button></div></section>

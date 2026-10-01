@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:fincas": "node --test tests/fincas/model.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
