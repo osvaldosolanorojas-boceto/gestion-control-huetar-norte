@@ -108,3 +108,5 @@
 .farm-panel summary{padding:12px 0;cursor:pointer}
 .farm-panel textarea{min-height:76px}
 @media(max-width:680px){.farm-panel .formgrid{grid-template-columns:1fr}.farm-panel .formgrid .wide{grid-column:auto}.farm-panel input,.farm-panel select,.farm-panel textarea{font-size:16px}}
+
+.supply-order-items{margin-top:12px}.supply-order-items h4{margin:0 0 12px}.supply-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}.supply-facts div{display:flex;flex-direction:column;gap:4px}.supply-facts span{font-size:13px;color:#60748a}.supply-facts b{font-size:15px;color:#173a68}.supply-order-items button{margin:5px 8px 5px 0}.supply-order-items small{display:block;margin:8px 0}.supply-order>div{min-width:0;flex:1}.supply-order{align-items:flex-start}@media(max-width:600px){.supply-order{flex-wrap:wrap}.supply-purchase-line{padding:12px}.supply-facts{gap:10px}.supply-facts b{overflow-wrap:anywhere}}
