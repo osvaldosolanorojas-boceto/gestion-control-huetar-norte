@@ -1,3 +1,4 @@
+import {validThousandths} from './inventory-examples-model'
 import React,{useEffect,useState} from 'react'
 import {Plus,X} from 'lucide-react'
 import {supabase} from './supabase'
@@ -58,7 +59,7 @@ export default function SupplyPurchases({go}){
   }
   const correct=async()=>{
     const price=Number(correction.precio),quantity=Number(correction.cantidad)
-    if(!Number.isFinite(price)||price<0||!Number.isFinite(quantity)||quantity<=0||Math.round(quantity*1000)!==quantity*1000||correction.motivo.trim().length<8){setError('Revise precio, cantidad y motivo de al menos 8 caracteres.');return}
+    if(!Number.isFinite(price)||price<0||!Number.isFinite(quantity)||quantity<=0||!validThousandths(quantity)||correction.motivo.trim().length<8){setError('Revise precio, cantidad y motivo de al menos 8 caracteres.');return}
     setSaving(true);setError('')
     const {error:e}=await supabase.rpc('corregir_precio_insumo',{p_linea_id:correction.id,p_precio:price,p_cantidad:quantity,p_motivo:correction.motivo.trim()})
     setSaving(false);if(e){setError(e.message);return}setCorrection(null);load()
