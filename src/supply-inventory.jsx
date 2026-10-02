@@ -4,7 +4,7 @@ import {packageEquivalent} from './supply-packages'
 import {Plus,X} from 'lucide-react'
 import {supabase} from './supabase'
 
-const categories=['Parafina','Cera','Esquineros','Papel','Guantes','Fleje','Grapas','Grapas para cartón','Cloro','Etiquetas','Limpieza','Higiene','Mantenimiento','Otros']
+const categories=['Tarimas','Parafina','Cera','Esquineros','Papel','Guantes','Fleje','Grapas','Grapas para cartón','Cloro','Etiquetas','Limpieza','Higiene','Mantenimiento','Otros']
 const empty=()=>({nombre:'',categoria:'Otros',unidad:'unidades',minimo:'0',activo:true,presentacion_compra:'unidad',unidades_por_presentacion:'1',precio_referencia:'',moneda_referencia:'USD',especificacion:''})
 const fmt=value=>Number(value||0).toLocaleString('es-CR',{maximumFractionDigits:3})
 export default function SupplyInventory({go}){

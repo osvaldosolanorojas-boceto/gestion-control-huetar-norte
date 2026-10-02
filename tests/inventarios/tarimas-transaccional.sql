@@ -1,0 +1,33 @@
+begin;
+select set_config('request.jwt.claim.sub',(select id::text from public.perfiles where activo and rol='administrador' limit 1),true);
+set local role authenticated;
+do $$
+declare eu uuid;us uuid;i uuid;j uuid;o uuid;l uuid;n numeric;failed boolean;tag text:='PRUEBA_'||gen_random_uuid();
+begin
+ eu:=public.guardar_tipo_tarima(null,'Europa',tag,120,80,'cm',10,true,'PRUEBA');
+ us:=public.guardar_tipo_tarima(null,'Estados Unidos',tag,48,40,'pulgadas',5,true,'PRUEBA');
+ select insumo_id into i from public.tipos_tarimas where id=eu;
+ select insumo_id into j from public.tipos_tarimas where id=us;
+ o:=public.crear_orden_insumos('2026-10-01','SIMULADO · tarimas',null,'CRC','PRUEBA',jsonb_build_array(jsonb_build_object('insumo_id',i,'presentacion','tarima','factor',1,'cantidad',100,'precio',5000)));
+ select id into l from public.ordenes_insumos_lineas where orden_id=o;
+ perform public.recibir_insumo_operacion(l,100,'2026-10-01','PRUEBA');
+ perform public.consumir_insumo_operacion(i,22,'2026-10-01',null,'PRUEBA','Embarque de prueba');
+ if (select existencia from public.insumos where id=i)<>78 then raise exception 'Saldo europeo incorrecto';end if;
+ if (select existencia from public.insumos where id=j)<>0 then raise exception 'Mezcló mercados';end if;
+ if not exists(select 1 from public.cxp_operativa where origen='compra_insumos' and origen_id=o and monto=500000) then raise exception 'Deuda incorrecta';end if;
+ failed:=false;
+ begin perform public.consumir_insumo_operacion(i,0.5,'2026-10-01',null,'PRUEBA',null);exception when others then failed:=true;end;
+ if not failed then raise exception 'Aceptó media tarima';end if;
+ failed:=false;
+ begin perform public.consumir_insumo_operacion(i,79,'2026-10-01',null,'PRUEBA',null);exception when others then failed:=true;end;
+ if not failed then raise exception 'Aceptó más que el saldo';end if;
+ failed:=false;
+ begin perform public.guardar_tipo_tarima(eu,'Europa',tag,120,100,'cm',10,true,null);exception when others then failed:=true;end;
+ if not failed then raise exception 'Cambió tamaño con movimientos';end if;
+ perform public.registrar_movimiento_insumo(j,'entrada',10,'PRUEBA','Saldo inicial de prueba');
+ if (select existencia from public.insumos where id=j)<>10 then raise exception 'Saldo inicial incorrecto';end if;
+ failed:=false;
+ begin perform public.guardar_tipo_tarima(null,'Europa',tag,120,80,'cm',10,true,null);exception when unique_violation then failed:=true;end;
+ if not failed then raise exception 'Duplicó tipo';end if;
+end $$;
+rollback;
